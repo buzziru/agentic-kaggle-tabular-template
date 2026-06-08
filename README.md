@@ -9,7 +9,7 @@ Kaggle 대회 완주에서 검증한 구조와 규율을 일반화한 ML/Kaggle 
 
 ## 왜 이 템플릿인가
 
-- **동작하는 스캐폴드.** 문서뿐 아니라 코드가 실제로 돈다. CV·OOF·로깅·제출 같은 학습 공통 골격은 `src/train_common.py` 한 곳에만 둔다. 새 모델은 이 골격을 복제하지 않고, 모델별로 다른 두 콜백(`prepare`=범주형 전처리, `fit_predict`=학습/예측)만 정의하면 된다. 덕분에 **모델 하나 추가가 약 40줄**로 끝나고, 골격을 고치면 모든 모델에 한 번에 반영된다. LightGBM(`src/train_lgbm.py`)·XGBoost(`src/train_xgb.py`)가 그 예시다.
+- **동작하는 스캐폴드.** CV·OOF·로깅·제출 같은 학습 공통 골격은 `src/train_common.py` 한 곳에만 둔다. 새 모델은 이 골격을 복제하지 않고, 모델별로 다른 두 콜백(`prepare`=범주형 전처리, `fit_predict`=학습/예측)만 정의하면 된다. 덕분에 **모델 하나 추가가 약 40줄**로 끝나고, 골격을 고치면 모든 모델에 한 번에 반영된다. LightGBM(`src/train_lgbm.py`)·XGBoost(`src/train_xgb.py`)가 그 예시다.
 - **회고 기반 프로세스 가드.** 실전에서 반복된 실패를 코드와 체크 게이트로 박제했다. 예컨대 같은 코드의 2중 사본이 어긋나는 문제, 설정 노브 불일치, 동결돼야 할 OOF 가 바뀌는 문제, 효용 낮은 레버에 대한 과투자다. 대응 장치로 `scripts/check_fold_inputs.py`(OOF 불변 검증), Stop 훅 커밋 리마인더, 천장 게이트(과몰입 방지)를 둔다.
 - **누수 안전 기본값.** fold 내부에서만 fit 하는 OOF 타깃 인코딩(`src/encoders.py`), 행 단위 피처 예시와 그룹/시계열 과거-only 레시피([docs/feature_engineering.md](docs/feature_engineering.md)), CV-분할 일치 원칙을 처음부터 강제한다.
 - **단일 스트림 실험 추적.** 모든 모델·스택·앙상블이 동일한 JSON 로그와 OOF/제출 계약을 거친다. `scripts/summarize.py` 로 전체를 한 리더보드에 모아 본다.
@@ -18,13 +18,15 @@ Kaggle 대회 완주에서 검증한 구조와 규율을 일반화한 ML/Kaggle 
 
 ## 핵심 설계 원칙
 
-| 원칙 | 강제 위치 |
-|---|---|
-| 피처는 단일 진입점에만 (`build_features`) — 코드 파편화 방지 | `src/features.py`, `conf/features/*.yaml` 노브 |
-| 모델 추가 = 어댑터 (스캐폴드 복제 금지) | `src/train_common.py` + `src/train_<model>.py` |
-| frozen 멤버 OOF 불변 | `scripts/check_fold_inputs.py` |
-| 결정 근거 기록 (ADR-lite) + 트랙 종료 회고 의무 | `docs/wiki/decisions.md`, `docs/wiki/experiments/` |
-| 측정 검정력 인지 (작은 Δ 단일 시드 판정 금지) | `docs/setup_questions.md`, 검증 전략 |
+
+| 원칙                                          | 강제 위치                                              |
+| ------------------------------------------- | -------------------------------------------------- |
+| 피처는 단일 진입점에만 (`build_features`) — 코드 파편화 방지 | `src/features.py`, `conf/features/*.yaml` 노브       |
+| 모델 추가 = 어댑터 (스캐폴드 복제 금지)                    | `src/train_common.py` + `src/train_<model>.py`     |
+| frozen 멤버 OOF 불변                            | `scripts/check_fold_inputs.py`                     |
+| 결정 근거 기록 (ADR-lite) + 트랙 종료 회고 의무           | `docs/wiki/decisions.md`, `docs/wiki/experiments/` |
+| 측정 검정력 인지 (작은 Δ 단일 시드 판정 금지)                | `docs/setup_questions.md`, 검증 전략                   |
+
 
 각 원칙의 배경과 근거는 [CLAUDE.md](CLAUDE.md) 에 모두 담겨 있다 (AI 에이전트·사람 공용 상시 가이드).
 
@@ -84,11 +86,13 @@ uv run python scripts/summarize.py   # 실험 리더보드
 
 베이스라인과 중간 실험은 로컬 CPU(`uv run python -m src.train_lgbm ...`)로 돌리고, 대형 모델·장시간 튜닝만 GPU 로 오프로드한다. 참조 프로젝트는 **Lightning AI Studio** 환경에서 진행했고, GPU 활용을 위해 세 가지 실행 경로를 문서화해 두었다. 같은 `src/` 코드가 환경만 바꿔 그대로 돌아가며, 각 런북에 운영 이슈와 실전 교훈이 정리돼 있다.
 
-| 경로 | GPU | 비용 | 실행 방식 | 언제 쓰나 | 런북 |
-|---|---|---|---|---|---|
-| **Lightning AI Job** | T4~H200 | 크레딧 과금 | 헤드리스 (`src/` 코드 그대로 Job 제출) | wandb online·반복/통합 라운드 (베이스 프로젝트 주 환경) | [lightning_jobs.md](docs/wiki/lightning_jobs.md) |
-| **Kaggle GPU 커널** | T4 / P100 | 무료 쿼터(주간 한도) | 헤드리스 (`src` Dataset push 후 `kernels push`) | torch 외 모델·단발 실행 | [kaggle_jobs.md](docs/wiki/kaggle_jobs.md) |
-| **Colab** | L4 24GB | Pro/PAYG | 노트북 직접 업로드·UI 실행 (헤드리스 아님) | Kaggle T4 16GB 로 OOM 이고 L4 면 해결되는 모델 | [colab_jobs.md](docs/wiki/colab_jobs.md) |
+
+| 경로                   | GPU       | 비용           | 실행 방식                                      | 언제 쓰나                                  | 런북                                               |
+| -------------------- | --------- | ------------ | ------------------------------------------ | -------------------------------------- | ------------------------------------------------ |
+| **Lightning AI Job** | T4~H200   | 크레딧 과금       | 헤드리스 (`src/` 코드 그대로 Job 제출)                | wandb online·반복/통합 라운드 (베이스 프로젝트 주 환경) | [lightning_jobs.md](docs/wiki/lightning_jobs.md) |
+| **Kaggle GPU 커널**    | T4 / P100 | 무료 쿼터(주간 한도) | 헤드리스 (`src` Dataset push 후 `kernels push`) | torch 외 모델·단발 실행                       | [kaggle_jobs.md](docs/wiki/kaggle_jobs.md)       |
+| **Colab**            | L4 24GB   | Pro/PAYG     | 노트북 직접 업로드·UI 실행 (헤드리스 아님)                 | Kaggle T4 16GB 로 OOM 이고 L4 면 해결되는 모델   | [colab_jobs.md](docs/wiki/colab_jobs.md)         |
+
 
 선택 기준 비교표는 `kaggle_jobs.md` 의 "Kaggle vs Lightning Job" 섹션이 단일 출처다. 노트북 변환·실행 규칙은 [notebook_conventions.md](docs/wiki/notebook_conventions.md) 를 참조한다.
 
