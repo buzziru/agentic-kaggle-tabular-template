@@ -1,4 +1,4 @@
-# Agent-Assisted Kaggle Tabular Experimentation Template
+# Agentic Kaggle Tabular Template
 
 **English** | [한국어](README.ko.md)
 
@@ -20,11 +20,13 @@ It is **not** a general-purpose ML starter — read **Scope** below before adopt
 ## Scope — who this is for
 
 **A good fit if you:**
+
 - compete on **Kaggle-style tabular** problems (CSV in → OOF / submission out);
 - work **with Claude Code** (or a similar coding agent) and want an agent-native workflow with built-in guards;
 - value **experiment discipline** — OOF CV, stacking/blending, leakage prevention, reproducible single-stream logs.
 
 **Probably *not* a fit if you:**
+
 - need **production ML** — serving, pipelines, MLOps, monitoring. This targets offline experimentation, not deployment.
 - work on **image / NLP / deep-learning-centric** tasks. The scaffold is **GBDT / tabular-first** (LightGBM / XGBoost adapters).
 - are a **complete ML beginner**. It assumes working knowledge of cross-validation, leakage, ensembling, and `Hydra` / `uv`.
@@ -41,13 +43,15 @@ It is **not** a general-purpose ML starter — read **Scope** below before adopt
 
 ## Core design principles
 
-| Principle | Enforced in |
-|---|---|
-| Features in a single entry point only (`build_features`) — prevents code fragmentation | `src/features.py`, `conf/features/*.yaml` knobs |
-| Adding a model = an adapter (no scaffold duplication) | `src/train_common.py` + `src/train_<model>.py` |
-| Frozen member OOF is immutable | `scripts/check_fold_inputs.py` |
-| Record decision rationale (ADR-lite) + mandatory end-of-track retrospective | `docs/wiki/decisions.md`, `docs/wiki/experiments/` |
-| Be aware of measurement power (don't judge a small Δ on a single seed) | `docs/setup_questions.md`, validation strategy |
+
+| Principle                                                                              | Enforced in                                        |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Features in a single entry point only (`build_features`) — prevents code fragmentation | `src/features.py`, `conf/features/*.yaml` knobs    |
+| Adding a model = an adapter (no scaffold duplication)                                  | `src/train_common.py` + `src/train_<model>.py`     |
+| Frozen member OOF is immutable                                                         | `scripts/check_fold_inputs.py`                     |
+| Record decision rationale (ADR-lite) + mandatory end-of-track retrospective            | `docs/wiki/decisions.md`, `docs/wiki/experiments/` |
+| Be aware of measurement power (don't judge a small Δ on a single seed)                 | `docs/setup_questions.md`, validation strategy     |
+
 
 The rationale behind each principle is in [CLAUDE.md](CLAUDE.md) (the always-on guide shared by AI agents and humans; written in Korean).
 
@@ -107,11 +111,13 @@ See [TASK.md](TASK.md) for milestones/gates and [CURRENT_STATUS.md](CURRENT_STAT
 
 Run baselines and mid-experiments on local CPU (`uv run python -m src.train_lgbm ...`); offload only large models and long tuning to GPU. The reference project ran on **Lightning AI Studio**, and three execution paths are documented for GPU use. The same `src/` code runs unchanged across environments — only the environment changes — and each runbook captures operational issues and field lessons.
 
-| Path | GPU | Cost | Execution | When to use | Runbook |
-|---|---|---|---|---|---|
-| **Lightning AI Job** | T4~H200 | metered credits | headless (submit `src/` code as-is as a Job) | wandb online · iterative/integration rounds (the base project's main env) | [lightning_jobs.md](docs/wiki/lightning_jobs.md) |
-| **Kaggle GPU kernel** | T4 / P100 | free quota (weekly limit) | headless (push `src` as a Dataset, then `kernels push`) | non-torch models · one-off runs | [kaggle_jobs.md](docs/wiki/kaggle_jobs.md) |
-| **Colab** | L4 24GB | Pro/PAYG | upload & run the notebook in the UI (not headless) | models that OOM on Kaggle's T4 16GB but fit on L4 | [colab_jobs.md](docs/wiki/colab_jobs.md) |
+
+| Path                  | GPU       | Cost                      | Execution                                               | When to use                                                               | Runbook                                          |
+| --------------------- | --------- | ------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------ |
+| **Lightning AI Job**  | T4~H200   | metered credits           | headless (submit `src/` code as-is as a Job)            | wandb online · iterative/integration rounds (the base project's main env) | [lightning_jobs.md](docs/wiki/lightning_jobs.md) |
+| **Kaggle GPU kernel** | T4 / P100 | free quota (weekly limit) | headless (push `src` as a Dataset, then `kernels push`) | non-torch models · one-off runs                                           | [kaggle_jobs.md](docs/wiki/kaggle_jobs.md)       |
+| **Colab**             | L4 24GB   | Pro/PAYG                  | upload & run the notebook in the UI (not headless)      | models that OOM on Kaggle's T4 16GB but fit on L4                         | [colab_jobs.md](docs/wiki/colab_jobs.md)         |
+
 
 The single source for the selection comparison is the "Kaggle vs Lightning Job" section in `kaggle_jobs.md`. For notebook conversion/run rules, see [notebook_conventions.md](docs/wiki/notebook_conventions.md).
 
