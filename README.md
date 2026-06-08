@@ -30,6 +30,7 @@ experiments/       # logs(JSON) · oof · submissions  (내용물 git 제외)
 ```bash
 # 1) 의존성 (uv)
 uv sync                              # eda/gpu 추가: uv sync --extra eda --extra gpu
+#  → 생성된 uv.lock 을 이 프로젝트에 커밋한다 (lock 은 프로젝트별 산출물; 템플릿엔 미포함).
 
 # 2) 인증
 cp .env.example .env                 # KAGGLE_USERNAME/KAGGLE_KEY/WANDB_API_KEY 채우기
