@@ -34,7 +34,7 @@ lightning run job \
   --machine L4 \
   --studio {{STUDIO}} \
   --teamspace {{TEAMSPACE}} --user {{TEAMSPACE_OWNER}} \
-  --command ".venv/bin/python -m src.train exp_id=... model=<m> features=<f> ..." \
+  --command ".venv/bin/python -m src.train_<model> exp_id=... model=<model> features=<f> ..." \
   -e WANDB_API_KEY=$WANDB_API_KEY \
   [--interruptible] [--max_runtime 14400]
 ```
@@ -49,7 +49,7 @@ job = Job.run(
     machine=Machine.L4,
     studio="{{STUDIO}}",
     teamspace="{{TEAMSPACE}}",   # owner=user '{{TEAMSPACE_OWNER}}' → Teamspace(name='{{TEAMSPACE}}', user='{{TEAMSPACE_OWNER}}')
-    command=".venv/bin/python -m src.train exp_id=exp_NNN model=<m> features=<f> use_wandb=true",
+    command=".venv/bin/python -m src.train_<model> exp_id=exp_NNN model=<model> features=<f> use_wandb=true",
     env={"WANDB_API_KEY": "..."},
     interruptible=False,
     max_runtime=14400,
@@ -65,7 +65,7 @@ job = Job.run(
 set -a; . ./.env; set +a   # WANDB_API_KEY 로드
 lightning run job --name <name> --machine L4 \
   --studio {{STUDIO}} --teamspace {{TEAMSPACE}} --user {{TEAMSPACE_OWNER}} \
-  --command ".venv/bin/python -m src.train exp_id=<exp> model=<m> features=<f> use_wandb=true" \
+  --command ".venv/bin/python -m src.train_<model> exp_id=<exp> model=<model> features=<f> use_wandb=true" \
   -e WANDB_API_KEY=$WANDB_API_KEY
 # 회수:
 cp /teamspace/jobs/<name>/artifacts/experiments/{oof,submissions,logs}/<exp>.* experiments/...

@@ -2,7 +2,7 @@
 
 모든 모듈은 하드코딩 대신 이 파일의 상수를 참조한다.
 튜닝/스윕 대상 하이퍼파라미터(모델 params, 타깃 인코딩 smoothing 등)는 여기가 아니라
-`conf/` (Hydra) 에 둔다 — `src/train.py` 참조.
+`conf/` (Hydra) 에 둔다 — `src/train_lgbm.py` 참조.
 
 ▶ 새 프로젝트에서 채울 것: 컬럼 정의(ID/TARGET/CATEGORICAL/NUMERIC/GROUP_KEYS),
   METRIC, COMPETITION, WANDB_PROJECT.

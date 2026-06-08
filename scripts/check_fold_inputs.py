@@ -73,8 +73,8 @@ class _DummyXGB:
 
 
 def _patch_lgbm():
-    """LGBM(train.py): lgb.train 을 더미로 (함수 패치)."""
-    import src.train as T
+    """LGBM(train_lgbm.py): lgb.train 을 더미로 (함수 패치)."""
+    import src.train_lgbm as T
 
     def dummy_train(params, train_set, num_boost_round=0, valid_sets=None, callbacks=None, **k):
         xval = valid_sets[0].data if valid_sets else None

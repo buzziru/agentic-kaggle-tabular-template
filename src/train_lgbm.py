@@ -6,10 +6,10 @@
    train_common 단일 소스라, 골격을 고쳐도 모든 모델이 한 번에 따라온다.
 
 실행:
-    uv run python -m src.train exp_id=exp_001 "notes='lgbm baseline'"   # notes 특수문자는 작은따옴표
-    uv run python -m src.train exp_id=exp_002 features=te_example          # 타깃 인코딩
-    uv run python -m src.train exp_id=exp_003 model.params.num_leaves=127  # 파라미터 오버라이드
-    uv run python -m src.train -m model.params.num_leaves=63,127,255       # 스윕(멀티런)
+    uv run python -m src.train_lgbm exp_id=exp_001 "notes='lgbm baseline'"   # notes 특수문자는 작은따옴표
+    uv run python -m src.train_lgbm exp_id=exp_002 features=te_example          # 타깃 인코딩
+    uv run python -m src.train_lgbm exp_id=exp_003 model.params.num_leaves=127  # 파라미터 오버라이드
+    uv run python -m src.train_lgbm -m model.params.num_leaves=63,127,255       # 스윕(멀티런)
 """
 
 from __future__ import annotations
