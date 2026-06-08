@@ -1,11 +1,11 @@
 ﻿# TASK — 프로젝트 계획 & 마일스톤
 
 > 전체 계획의 **인덱스**. 각 작업의 세부계획은 `docs/tasks/<id>.md` 에 따로 두고 여기서는 **포인터**로만 관리한다.
-> 진행 상태(현재값·다음 액션)는 `CURRENT_STATUS.md`(세션 핸드오프), 결정 근거는 `docs/wiki/decisions.md`.
+> 진행 상태(현재값·다음 액션)는 [CURRENT_STATUS.md](CURRENT_STATUS.md)(세션 핸드오프), 결정 근거는 [docs/wiki/decisions.md](docs/wiki/decisions.md).
 
 ## 사용법
 - 작업 = **독립 실행 가능한 단위**. `(∥)` 표시 = 다른 작업과 **병렬 가능**(서브에이전트/세션 분할 OK).
-- 작업 착수 시: `docs/tasks/_TEMPLATE.md` 복사 → `docs/tasks/<id>-<slug>.md` 생성(목표·성공기준·단계·파일·의존성) → 본 표의 포인터 연결 → 완료 시 `[x]` + `CURRENT_STATUS.md` 갱신.
+- 작업 착수 시: [docs/tasks/_TEMPLATE.md](docs/tasks/_TEMPLATE.md) 복사 → `docs/tasks/<id>-<slug>.md` 생성(목표·성공기준·단계·파일·의존성) → 본 표의 포인터 연결 → 완료 시 `[x]` + [CURRENT_STATUS.md](CURRENT_STATUS.md) 갱신.
 - 상태: `[ ]` 대기 · `[~]` 진행 · `[x]` 완료 · `[-]` 기각(사유는 detail 파일).
 
 ## 마일스톤 개요
