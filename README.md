@@ -7,6 +7,9 @@ Kaggle 대회 완주에서 검증한 구조와 규율을 일반화한 ML/Kaggle 
 > **이 README 는 템플릿 리포 자체를 설명한다.** 각 프로젝트가 쓰는 README 는
 > [docs/PROJECT_README.template.md](docs/PROJECT_README.template.md) 에 따로 있다 (시작할 때 루트로 복사).
 
+> **동작 확인:** `uv sync && uv run python examples/run_example.py` — 더미 데이터로
+> 전체 파이프라인(로드→피처→CV→OOF→제출→로그)이 도는 것을 바로 확인한다. 자세히는 [examples/](examples/).
+
 ## 왜 이 템플릿인가
 
 - **동작하는 스캐폴드.** CV·OOF(Out-of-Fold)·로깅·제출 같은 학습 공통 골격은 `src/train_common.py` 한 곳에만 둔다. 새 모델은 이 골격을 복제하지 않고, 모델별로 다른 두 콜백(`prepare`=범주형 전처리, `fit_predict`=학습/예측)만 정의하면 된다. 덕분에 **모델 하나 추가가 약 40줄**로 끝나고, 골격을 고치면 모든 모델에 한 번에 반영된다. LightGBM(`src/train_lgbm.py`)·XGBoost(`src/train_xgb.py`)가 그 예시다.
