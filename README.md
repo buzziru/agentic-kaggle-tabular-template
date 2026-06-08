@@ -1,10 +1,11 @@
-# ML / Kaggle Project Template
+# Agent-Assisted Kaggle Tabular Experimentation Template
 
 **English** | [한국어](README.ko.md)
 
-A generalized ML/Kaggle project template distilled from a completed, validated Kaggle competition run.
-Not an empty boilerplate — it ships a **working scaffold** plus **process guards derived from real post-mortems**.
-Start a new project by cloning this repo and filling in the placeholders.
+A **focused, opinionated** template for **Kaggle-style tabular experimentation with a coding agent** —
+OOF cross-validation, stacking, leakage guards, and a post-mortem-driven workflow, distilled from a completed Kaggle run.
+Not an empty boilerplate: it ships a **working scaffold** plus **process guards derived from real post-mortems**.
+It is **not** a general-purpose ML starter — read **Scope** below before adopting.
 
 > 🇰🇷 **Note on language:** This README is in English, but the core guide ([CLAUDE.md](CLAUDE.md)) and the
 > detailed docs under `docs/` are written in **Korean** — they are the canonical source. This README is a
@@ -15,6 +16,19 @@ Start a new project by cloning this repo and filling in the placeholders.
 
 > **Try it:** `uv sync && uv run python examples/run_example.py` — runs the whole pipeline
 > (load → features → CV → OOF → submission → log) on dummy data so you can see it work. Details: [examples/](examples/).
+
+## Scope — who this is for
+
+**A good fit if you:**
+- compete on **Kaggle-style tabular** problems (CSV in → OOF / submission out);
+- work **with Claude Code** (or a similar coding agent) and want an agent-native workflow with built-in guards;
+- value **experiment discipline** — OOF CV, stacking/blending, leakage prevention, reproducible single-stream logs.
+
+**Probably *not* a fit if you:**
+- need **production ML** — serving, pipelines, MLOps, monitoring. This targets offline experimentation, not deployment.
+- work on **image / NLP / deep-learning-centric** tasks. The scaffold is **GBDT / tabular-first** (LightGBM / XGBoost adapters).
+- are a **complete ML beginner**. It assumes working knowledge of cross-validation, leakage, ensembling, and `Hydra` / `uv`.
+- **don't use a coding agent.** The code runs standalone, but the agents (`.claude/agents/`) and hooks are central to the design — without them you skip a main reason to pick this over a plainer template.
 
 ## Why this template
 
