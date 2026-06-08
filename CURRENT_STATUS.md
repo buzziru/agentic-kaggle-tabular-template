@@ -5,10 +5,10 @@
 
 _최종 갱신: {{YYYY-MM-DD}} — 세션 {{N}}_
 
-## 🟢 현재 최고 (현재값 SSOT)
-- 최고 단일: {{exp_id}} OOF {{0.____}} / 최고 스택: {{tag}} meta-OOF {{0.____}} / 제출 최고 LB {{Public/Private}}
-- 최종 제출 후보: `experiments/submissions/{{...}}.csv`
-- 통합 리더보드: `uv run python scripts/summarize.py`
+## 🟢 현재 최고 (수치 SSOT = summarize, 수동 복제 금지)
+- **`uv run python scripts/summarize.py`** 가 최신 리더보드(단일·스택·LB)를 출력 — **여기에 숫자를 베껴 적지 않는다**(드리프트 방지).
+- 최종 제출 후보(사람 판단): `experiments/submissions/{{...}}.csv`
+- 목표 격차 해석은 아래 🧭 에만 유지(summarize 가 안 주는 정보).
 
 ## 🧭 현재 위치
 - 마일스톤: **{{M?}}** · 진행 중 작업: **{{T?.?}}** → `docs/tasks/{{...}}.md`

@@ -45,7 +45,8 @@ multirun/
 .idea/
 .DS_Store
 
-# ===== Claude Code (에이전트는 추적, 나머지 로컬 설정 제외) =====
+# ===== Claude Code (에이전트·공유 설정 추적, 개인/로컬 설정 제외) =====
 .claude/*
 !.claude/agents/
+!.claude/settings.json
 .claude.json

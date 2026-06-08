@@ -25,7 +25,6 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 from omegaconf import DictConfig, OmegaConf
-from sklearn.metrics import roc_auc_score
 
 from src import config, cv, data, encoders, features, utils
 
@@ -58,6 +57,7 @@ def run_oof_cv(
     seed = cfg.get("seed", config.SEED)  # 모델 seed (seed averaging 노브). fold 분할은 config.SEED 고정.
     utils.seed_everything(seed)
     utils.load_env()
+    scorer = utils.get_scorer()  # config.METRIC 기준 (하드코딩 제거)
 
     exp_id, notes, use_wandb = cfg.exp_id, cfg.notes, cfg.use_wandb
     te_smoothing = cfg.features.target_encode_smoothing
@@ -91,6 +91,14 @@ def run_oof_cv(
         print(f"[features] feature_builder={feature_builder} 적용")
     train_df = build(data.load_train())
     test_df = build(data.load_test())
+
+    # 플레이스홀더 미채움 자동 차단 (템플릿 복사 후 config 미수정 silent 통과 방지).
+    for _n, _v in [("ID_COL", config.ID_COL), ("TARGET_COL", config.TARGET_COL)]:
+        if _v not in train_df.columns:
+            raise ValueError(f"config.{_n}='{_v}' 가 데이터 컬럼에 없음 — src/config.py 를 데이터에 맞게 채웠는지 확인")
+    if use_wandb and "{{" in config.WANDB_PROJECT:
+        raise ValueError("config.WANDB_PROJECT 플레이스홀더 미치환 — 채우거나 use_wandb=false")
+
     feat_cols = features.get_feature_cols(train_df)
     drop_cols = list(cfg.features.drop_cols)
     feat_cols = [c for c in feat_cols if c not in drop_cols]
@@ -158,7 +166,7 @@ def run_oof_cv(
         )
         oof[va_idx] = oof_pred
         test_pred += test_contrib / len(folds)
-        score = roc_auc_score(y_va, oof[va_idx])  # ⚠️ 지표가 바뀌면 scorer 교체
+        score = scorer(y_va, oof[va_idx])
         fold_scores.append(score)
         best_iters.append(best_iter)
         bi = f" (best_iter={best_iter})" if best_iter is not None else ""
@@ -173,7 +181,7 @@ def run_oof_cv(
         oof_score = float("nan")  # 부분 실행 → 전체 OOF 무의미. fold 점수만 신뢰.
         print(f"\n[부분 실행 {len(folds)}/{n_folds}] fold mean={np.mean(fold_scores):.6f} (OOF 생략)")
     else:
-        oof_score = roc_auc_score(y, oof)
+        oof_score = scorer(y, oof)
         print(f"\nOOF = {oof_score:.6f} | mean={np.mean(fold_scores):.6f} std={np.std(fold_scores):.6f}")
 
     config.OOF_DIR.mkdir(parents=True, exist_ok=True)

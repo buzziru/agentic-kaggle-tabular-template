@@ -27,8 +27,10 @@ def main() -> None:
         return
 
     by = args.sort if args.sort in df.columns else "cv_mean"
-    df = df.sort_values(by, ascending=False, na_position="last")
-    print(f"=== 실험 리더보드 ({len(df)}건, sort={by}) ===")
+    # cv_mean·lb_score 는 config.METRIC 방향대로(낮을수록 좋은 지표면 오름차순).
+    asc = (not utils.greater_is_better()) if by in ("cv_mean", "lb_score") else False
+    df = df.sort_values(by, ascending=asc, na_position="last")
+    print(f"=== 실험 리더보드 ({len(df)}건, sort={by}, metric={config.METRIC}) ===")
     print(df.to_string(index=False))
 
     hist = config.EXPERIMENTS_DIR / "submission_history.csv"

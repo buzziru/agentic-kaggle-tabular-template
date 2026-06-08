@@ -23,7 +23,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import log_loss, roc_auc_score
+from sklearn.metrics import log_loss
 
 from src import config, cv, data, utils
 
@@ -77,13 +77,13 @@ def _fit_predict(name: str, Xtr, ytr, Xva) -> np.ndarray:
     raise ValueError(name)
 
 
-def _cv_meta(name: str, X: np.ndarray, y: np.ndarray, X_test: np.ndarray, folds: list) -> dict:
+def _cv_meta(name: str, X: np.ndarray, y: np.ndarray, X_test: np.ndarray, folds: list, scorer) -> dict:
     """동일 fold 로 meta-OOF 산출 + 전체 재적합 test 예측."""
     oof = np.zeros(len(y))
     for tr, va in folds:
         oof[va] = _fit_predict(name, X[tr], y[tr], X[va])
     test = _fit_predict(name, X, y, X_test)  # 전체 재적합
-    return {"name": name, "oof_auc": roc_auc_score(y, oof), "oof": oof, "test": test}
+    return {"name": name, "oof_score": scorer(y, oof), "oof": oof, "test": test}
 
 
 def main() -> None:
@@ -95,23 +95,25 @@ def main() -> None:
 
     X, X_test, y = _load(members)
     folds = cv.get_folds(y)  # seed=42, base 와 동일 분할
+    scorer = utils.get_scorer()                 # config.METRIC 기준
+    greater = utils.greater_is_better()
 
-    print(f"=== members: {members} ===")
+    print(f"=== members: {members} ({config.METRIC}) ===")
     print("개별 OOF:")
     for j, m in enumerate(members):
-        print(f"  {m}: {roc_auc_score(y, X[:, j]):.6f}")
+        print(f"  {m}: {scorer(y, X[:, j]):.6f}")
     print("Pearson corr:")
     print(pd.DataFrame(np.corrcoef(X.T), index=members, columns=members).round(4).to_string())
 
-    results = [_cv_meta(n, X, y, X_test, folds) for n in ["equal", "rank_mean", "logistic", "nnls"]]
+    results = [_cv_meta(n, X, y, X_test, folds, scorer) for n in ["equal", "rank_mean", "logistic", "nnls"]]
     print("\n=== meta-OOF ===")
-    for r in sorted(results, key=lambda d: -d["oof_auc"]):
-        print(f"  {r['name']:>10}: {r['oof_auc']:.6f}")
+    for r in sorted(results, key=lambda d: d["oof_score"], reverse=greater):
+        print(f"  {r['name']:>10}: {r['oof_score']:.6f}")
 
     w_nnls = _nnls_weights(X, y)
     print("\nnnls 가중:", {m: round(float(w), 4) for m, w in zip(members, w_nnls)})
 
-    best = max(results, key=lambda d: d["oof_auc"])
+    best = (max if greater else min)(results, key=lambda d: d["oof_score"])
     config.OOF_DIR.mkdir(parents=True, exist_ok=True)
     config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
     train = data.load_train()
@@ -127,16 +129,16 @@ def main() -> None:
         exp_id=f"{args.tag}_{best['name']}",
         model=f"stack:{best['name']}",
         features=members,
-        cv_scores=[best["oof_auc"]],
+        cv_scores=[best["oof_score"]],
         params={
             "members": members,
             "meta_winner": best["name"],
-            "meta_oof": {r["name"]: round(float(r["oof_auc"]), 6) for r in results},
+            "meta_oof": {r["name"]: round(float(r["oof_score"]), 6) for r in results},
             "nnls_weights": {m: round(float(w), 4) for m, w in zip(members, w_nnls)},
         },
         notes=f"stack over {len(members)} members; meta={best['name']}",
     )
-    print(f"\n최고 메타 = {best['name']} ({best['oof_auc']:.6f}) → 저장: {args.tag}_{best['name']}.csv")
+    print(f"\n최고 메타 = {best['name']} ({best['oof_score']:.6f}) → 저장: {args.tag}_{best['name']}.csv")
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import random
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -137,6 +137,40 @@ def log_experiment(
     path = log_dir / f"{exp_id}.json"
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     return path
+
+
+def get_scorer(name: str | None = None) -> Callable[[Any, Any], float]:
+    """config.METRIC(또는 name)에 맞는 (y_true, y_pred)->float scorer 반환.
+
+    train_common/stack 의 점수 계산이 `config.METRIC` 하나로 자동 결정된다(하드코딩 제거).
+    지원: auc·logloss·rmse·mae·accuracy. 새 지표는 여기 + `greater_is_better` 에 추가.
+
+    Args:
+        name: 지표명. None 이면 `config.METRIC`.
+
+    Returns:
+        (y_true, y_pred) -> float scorer.
+    """
+    from sklearn import metrics  # 지연 임포트
+
+    name = (name or config.METRIC).lower()
+    if name == "auc":
+        return lambda y, p: float(metrics.roc_auc_score(y, p))
+    if name == "logloss":
+        return lambda y, p: float(metrics.log_loss(y, p))
+    if name == "rmse":
+        return lambda y, p: float(metrics.mean_squared_error(y, p) ** 0.5)
+    if name == "mae":
+        return lambda y, p: float(metrics.mean_absolute_error(y, p))
+    if name == "accuracy":
+        return lambda y, p: float(metrics.accuracy_score(y, (np.asarray(p) > 0.5).astype(int)))
+    raise ValueError(f"미지원 지표 '{name}' — utils.get_scorer 에 추가하라")
+
+
+def greater_is_better(name: str | None = None) -> bool:
+    """지표가 높을수록 좋은가 (정렬·best 선택 방향)."""
+    name = (name or config.METRIC).lower()
+    return name not in {"logloss", "rmse", "mae"}
 
 
 def load_logs(log_dir: Path | None = None) -> pd.DataFrame:
