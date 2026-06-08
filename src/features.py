@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from src import config
@@ -37,37 +36,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _group_past_expanding(df: pd.DataFrame, value_col: str, agg: str) -> pd.Series:
-    """그룹(GROUP_KEYS) 내 SEQUENCE_COL 오름차순으로 **과거 관측행만** expanding 집계.
+def add_example_features(df: pd.DataFrame) -> pd.DataFrame:
+    """예시: conf 의 `feature_builder` 훅으로 켜는 모델별/실험별 피처 (conf/features/*.yaml).
 
-    누수 0: `shift(1)` 후 expanding 이므로 현재 행 직전까지의 과거만 본다. 그룹별
-    정렬해 집계한 뒤 원본 index 로 복원한다(행 순서/index 불변, unique RangeIndex 가정).
-
-    Args:
-        df: GROUP_KEYS + SEQUENCE_COL + value_col 을 포함한 DataFrame.
-        value_col: 집계 대상 수치 컬럼.
-        agg: 'mean'|'std'|'max'|'min'|'sum' 중 하나.
-
-    Returns:
-        원본 index 정렬 Series (과거 없음 → NaN).
-    """
-    if not config.GROUP_KEYS or config.SEQUENCE_COL is None:
-        raise ValueError("config.GROUP_KEYS 와 SEQUENCE_COL 을 먼저 설정해야 한다")
-    keys = config.GROUP_KEYS
-    order = df.sort_values(keys + [config.SEQUENCE_COL], kind="mergesort").index
-    val = df.loc[order, value_col]
-    grp = [df.loc[order, k] for k in keys]
-    shifted = val.groupby(grp, observed=True).shift(1)  # 현재행 제외(과거만)
-    res = getattr(shifted.groupby(grp, observed=True).expanding(), agg)()
-    res = res.reset_index(level=list(range(len(keys))), drop=True)
-    return res.reindex(df.index)
-
-
-def add_example_group_features(df: pd.DataFrame) -> pd.DataFrame:
-    """예시: 모델별/실험별 변형을 켜는 `feature_builder` 훅 (conf/features 에서 지정).
-
-    그룹 내 과거 관측만 쓰는 누수 안전 파생의 패턴 예시. GROUP_KEYS/SEQUENCE_COL 이
-    없는 프로젝트(독립 행)면 그대로 통과한다.
+    데이터 형태와 무관한 **행-단위(누수 안전) 파생** 패턴 예시 — 다른 행/타깃을 참조하지
+    않으므로 누수 0. 실제 피처는 EDA 결과에 맞게 이 함수(또는 build_features)에서 정의하고,
+    변형은 코드 포크 대신 conf 노브로 켠다. 그룹/시계열 과거-only 집계가 필요하면
+    `docs/feature_engineering.md` 의 "그룹/시계열 과거-only 집계" 레시피를 가져다 쓴다.
 
     Args:
         df: build_features 적용 후 DataFrame.
@@ -75,11 +50,10 @@ def add_example_group_features(df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         파생이 추가된 복사본.
     """
-    if not config.GROUP_KEYS or config.SEQUENCE_COL is None:
-        return df.copy()
     out = df.copy()
-    # 예시 (실제 컬럼명으로 교체):
-    # out["x_past_mean"] = _group_past_expanding(out, "x", "mean").fillna(0).astype("float32")
+    # 행-단위 변환만 (다른 행/타깃 미참조 → 누수 0). 실제 컬럼명으로 교체 후 사용:
+    # out["num_missing"] = out[config.NUMERIC_COLS].isnull().sum(axis=1).astype("int16")
+    # out["a_over_b"] = (out["a"] / (out["b"] + 1e-6)).astype("float32")
     return out
 
 

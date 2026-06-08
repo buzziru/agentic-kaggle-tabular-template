@@ -3,4 +3,4 @@ target_encode_cols: []      # 비우면 native categorical 유지
 target_encode_smoothing: 20.0
 drop_cols: []               # 모델 입력에서 제외할 컬럼 (ablation 용)
 extra_categorical_cols: []  # 추가 범주형 (예: [year]) — NN=embedding, GBDT=native cat
-# feature_builder: add_example_group_features   # (선택) src/features.py 의 모델별/실험별 FE 훅
+# feature_builder: add_example_features   # (선택) src/features.py 의 모델별/실험별 FE 훅
