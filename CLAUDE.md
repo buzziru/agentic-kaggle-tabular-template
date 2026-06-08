@@ -91,9 +91,9 @@
 
 스택 풀은 모델을 계속 추가하며 커진다. 모델마다 학습 루프(seed/CV/OOF-TE/증강/저장/로그)를 **복제**하면, 풀이 커질수록 모델이 특정 코드에 묶여 리팩토링이 불가능해진다(참조 프로젝트 회고: LGBM 만 별도 경로였다가 모델별 설정이 제각각 갈라지는 문제(노브 divergence)가 반복돼 패리티 게이트까지 필요했다). 처음부터 아래 구조로 막는다.
 
-- **단일 스캐폴드 + 어댑터**: 공통 골격은 `src/train_common.py` 의 `run_oof_cv` **한 곳**에만 둔다. 새 모델은 골격을 복사하지 말고, `src/train_<model>.py` 에서 `**prepare`(범주형 전처리)** 와 `**fit_predict`(모델 fit/predict)** 두 콜백만 정의해 넘긴다. LGBM(`train_lgbm.py`)·XGB(`train_xgb.py`)가 그 예시이며, 한 모델 추가가 약 40줄이다. 골격을 고치면 **모든 모델이 한 번에** 따라온다(별도 경로 금지 — divergence 의 근원).
+- **단일 스캐폴드 + 어댑터**: 공통 골격은 `src/train_common.py` 의 `run_oof_cv` **한 곳**에만 둔다. 새 모델은 골격을 복사하지 말고, `src/train_<model>.py` 에서 **`prepare`**(범주형 전처리) 와 **`fit_predict`**(모델 fit/predict) 두 콜백만 정의해 넘긴다. LGBM(`train_lgbm.py`)·XGB(`train_xgb.py`)가 그 예시이며, 한 모델 추가가 약 40줄이다. 골격을 고치면 **모든 모델이 한 번에** 따라온다(별도 경로 금지 — divergence 의 근원).
 - **OOF 계약 = 디커플링 경계**: 모든 모델은 동일 fold(seed)로 `experiments/oof/<exp_id>.csv` = `[id, oof]`, `submissions/<exp_id>.csv` = `[id, <target>]` 형식만 산출한다. `src/stack.py` 는 **이 계약만** 소비하고 모델 내부 코드에 의존하지 않는다 → 멤버가 늘어도 스택에 모델별 특수 코드가 0 이다.
-- **frozen 멤버 OOF 불변(필수)**: 한 모델의 OOF 가 스택 풀에 들어가면 그 OOF 는 **동결**된다. `features.py`/`train_common` 리팩토링이 frozen 멤버의 OOF 를 바꾸면 같은-fold 정합이 깨져 풀 전체가 무효가 된다. 리팩토링 전후로 `**uv run python scripts/check_fold_inputs.py`** 를 돌려 fit/predict 입력이 바이트 동일한지 검증한다(GPU·실학습 불필요). 입력이 같으면 결정적 모델이라 OOF 동일이 보장된다.
+- **frozen 멤버 OOF 불변(필수)**: 한 모델의 OOF 가 스택 풀에 들어가면 그 OOF 는 **동결**된다. `features.py`/`train_common` 리팩토링이 frozen 멤버의 OOF 를 바꾸면 같은-fold 정합이 깨져 풀 전체가 무효가 된다. 리팩토링 전후로 **`uv run python scripts/check_fold_inputs.py`** 를 돌려 fit/predict 입력이 바이트 동일한지 검증한다(GPU·실학습 불필요). 입력이 같으면 결정적 모델이라 OOF 동일이 보장된다.
 - **모델별 FE 는 conf 훅으로**: 모델 전용 피처는 `features.py` 에 `add_<x>_features` 로 두고 `conf/features/*.yaml` 의 `feature_builder` 로 켠다(코드 포크 금지 — "코드 파편화 방지" 와 같은 원칙).
 
 ## 피처 엔지니어링 — 코드 파편화 방지 (필수)
@@ -101,7 +101,7 @@
 피처는 시행착오로 **수없이 수정·추가·폐기**된다. 매번 새 변형을 여기저기 흩뿌리면 코드가 파편화되고, 어느 버전이 실제로 도는지 알 수 없게 된다(참조 프로젝트의 "2중 사본 drift"·"복사-템플릿 상속" 재발 버그 — [docs/wiki/notebook_conventions.md](docs/wiki/notebook_conventions.md)). 처음부터 아래 규율로 코딩한다.
 
 - **단일 진입점**: 모든 피처는 `src/features.py` 의 `build_features()` 한 곳에만 구현한다. 노트북·학습 스크립트에 일회성 변환을 박지 않는다 — train/test 가 갈리고 누수·불일치의 근원이 된다.
-- **코드 분기 대신 설정 토글**: 피처 변형은 `build_features()` 를 복제·포크하지 말고 `**conf/features/*.yaml` 노브**(on/off·파라미터)로 켜고 끈다. 실험은 새 yaml 하나면 되고 코드는 그대로다. 함수 안의 동작 분기도 `cfg` 파라미터로 받되 `config.X` 를 기본값으로 둔다.
+- **코드 분기 대신 설정 토글**: 피처 변형은 `build_features()` 를 복제·포크하지 말고 **`conf/features/*.yaml` 노브**(on/off·파라미터)로 켜고 끈다. 실험은 새 yaml 하나면 되고 코드는 그대로다. 함수 안의 동작 분기도 `cfg` 파라미터로 받되 `config.X` 를 기본값으로 둔다.
 - **순수 함수로**: 각 피처 헬퍼는 입력 df → 출력 df 의 **부수효과 없는 작은 함수**로 쪼갠다. `build_features()` 는 이들을 조립만 한다. 거대한 단일 함수에 계속 덧붙이지 않는다.
 - **죽은 피처는 즉시 제거**: 기각된 피처/실험 코드는 트랙 종료 시 `build_features()` 에서 삭제하고 결론만 [docs/feature_engineering.md](docs/feature_engineering.md)·회고에 남긴다. "혹시 몰라" 주석 처리 코드를 쌓지 않는다.
 - **단일 진실원**: 같은 코드의 사본을 두 곳에 두지 않는다(예: 최상위 노트북 + push용 사본). 변경은 한 곳에서 하고 나머지는 생성기로 재생성한다.
@@ -126,10 +126,10 @@
 
 ## 코딩 컨벤션
 
-- **Python 버전 고정**(`.python-version`, 실행 환경과 동일). 의존성 관리는 `**uv`**(`uv sync` / `uv run`).
+- **Python 버전 고정**(`.python-version`, 실행 환경과 동일). 의존성 관리는 **`uv`**(`uv sync` / `uv run`).
 - **타입힌트 필수**, **Google 스타일 docstring**, 함수당 50줄 내외 권장.
 - **하드코딩 금지** — 경로/시드/컬럼 등 구조적 상수는 `src/config.py` 에 둔다.
-  - ⚠️ config 상수라도 로직에서 직접 참조하면(예: `x / config.N_FOLDS`) 그것도 하드코딩이다. 실험에서 바꿀 값은 `**cfg` 파라미터로 받되 `config.X` 를 기본값으로** 둔다(override 가능). 즉 config 는 기본값 공급원, 동작 분기는 cfg(Hydra)다.
+  - ⚠️ config 상수라도 로직에서 직접 참조하면(예: `x / config.N_FOLDS`) 그것도 하드코딩이다. 실험에서 바꿀 값은 **`cfg` 파라미터로 받되 `config.X` 를 기본값으로** 둔다(override 가능). 즉 config 는 기본값 공급원, 동작 분기는 cfg(Hydra)다.
 - **노트북 셀 규칙**: `;` 다중문 금지(setup 셀 예외) · 논리 블록 사이 빈 줄 · 셀당 단일 책임 · full 실행 전 소규모 fast-fail.
 - **재현성**: 모든 실험은 `seed_everything()` + 커밋 해시 로깅(`utils.log_experiment` 자동).
 - **문서 가독성·간결**: 문서는 한 문장·한 불릿에 한 가지만 담는다. 이유·원칙은 완전한 문장으로, 참조·열거·명령은 간결체로 쓰고, 절을 `·` 로 길게 잇는 run-on 을 피한다. 링크·코드는 올바른 마크다운으로 표기한다. ⚠️ **CLAUDE.md 는 매 세션 로드되므로 비대화 금지** — 상세 설명·런북은 `docs/wiki/` 로 빼고 여기엔 포인터만 둔다.
