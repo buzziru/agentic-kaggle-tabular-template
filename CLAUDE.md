@@ -2,9 +2,8 @@
 
 > **이 파일은 템플릿이다.** 새 ML/Kaggle 프로젝트를 시작할 때 이 파일을 프로젝트 루트로 복사하고
 > `{{...}}` 플레이스홀더를 채운 뒤 이 인용 블록을 지운다. `{{...}}` 가 아닌 본문(워크플로우·프로세스
-> 규율·검증 원칙·코딩 컨벤션)은 `F1_Pit_Stops`(Kaggle PS S6E5, Private 0.95460·상위 4.9%)에서
-> 검증된 재사용 자산이므로 **이유 없이 바꾸지 않는다**. 프로젝트 성격에 안 맞는 섹션만 잘라낸다.
-> 템플릿 자체에 동작하는 스캐폴드(`src/`, `conf/`, `.claude/agents/`, `docs/wiki/`)가 들어 있다. 이 구조·규율은 **완성 참조 구현**(Kaggle PS S6E5, Private 0.95460·상위 4.9%)에서 도출·검증했다.
+> 규율·검증 원칙·코딩 컨벤션)은 **이유 없이 바꾸지 않는다**. 프로젝트 성격에 안 맞는 섹션만 잘라낸다.
+> 템플릿 자체에 동작하는 스캐폴드(`src/`, `conf/`, `.claude/agents/`, `docs/wiki/`)가 들어 있다. 이 구조·규율은 **캐글 컴피티션**에서 도출·검증했다.
 
 ---
 
@@ -27,7 +26,7 @@
    - EDA 의존성: `uv sync --extra eda` (matplotlib/seaborn). 노트북 첫 셀에서 프로젝트 루트를 `sys.path` 에 추가해 `import src` 가 되게 한다.
 2. **피처/모델링**: `src/` 중심 `.py` 작업. 피처는 **오직 `src/features.py` 한 곳**에서 train/test 공통 적용 (아래 "피처 엔지니어링 — 코드 파편화 방지").
 3. **실행**:
-   - **베이스라인·중간 실험은 로컬** `.py` 중심 (`uv run python -m src.train ...`).
+   - **베이스라인·중간 실험은 로컬** `.py` 중심 (`uv run python -m src.train_lgbm ...`).
    - 대형 모델·장시간 튜닝은 **GPU 환경** 사용. 환경별 실행 런북 = `docs/wiki/kaggle_jobs.md`(Kaggle GPU 커널 헤드리스), `docs/wiki/lightning_jobs.md`(Lightning AI Job), `docs/wiki/colab_jobs.md`(Colab L4, T4 OOM 모델). 선택 기준은 kaggle_jobs 의 비교표 참조.
    - ⚠️ 노트북 환경에 올릴 땐 `src/` 코드를 `.ipynb` 로 변환하거나 Dataset 으로 push 후 import. 노트북 작성 규칙은 `docs/wiki/notebook_conventions.md`(생성기 기반·단일 진실원·fast-fail). 반복되는 변환·실행 오류는 1회 발생 즉시 가드로 코드화(아래 "외부 인프라 가드").
 4. **실험 결과**: `experiments/logs/<exp_id>.json` 구조화 로그 (+ W&B, 아래 "실험 추적" 참조).
@@ -112,8 +111,9 @@
 ## 실행 예시
 설치·다운로드·제출 전체는 `README.md`. 학습(Hydra: OOF+제출+JSON 로그+W&B):
 ```bash
-uv run python -m src.train exp_id=exp_001 "notes='baseline'"
+uv run python -m src.train_lgbm exp_id=exp_001 "notes='baseline'"
 #  오버라이드: model.params.<key>=<val> / 피처셋: features=<yaml> / W&B 끄기: use_wandb=false
+#  다른 모델 어댑터: src.train_xgb (XGB) … 새 모델은 src/train_<model>.py 추가
 #  ⚠️ notes 공백·특수문자는 작은따옴표: "notes='...'"
 ```
 
