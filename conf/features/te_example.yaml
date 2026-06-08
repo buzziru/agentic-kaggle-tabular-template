@@ -1,0 +1,6 @@
+# 예시: 고카디널리티 범주형 OOF 타깃 인코딩 활성 (native categorical 에서 제외 → fold-내 OOF 치환).
+# <high_card_col> 을 실제 컬럼명(예: user_id)으로 교체한다. 코드 포크 대신 이런 yaml 추가로 실험 분기.
+target_encode_cols: [<high_card_col>]
+target_encode_smoothing: 20.0
+drop_cols: []
+extra_categorical_cols: []

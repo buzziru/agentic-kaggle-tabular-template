@@ -1,0 +1,5 @@
+{
+  "title": "{{SRC_DATASET}}",
+  "id": "{{KAGGLE_USER}}/{{SRC_DATASET}}",
+  "licenses": [{"name": "CC0-1.0"}]
+}

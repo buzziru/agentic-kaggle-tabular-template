@@ -1,0 +1,15 @@
+# XGBoost 하이퍼파라미터 (튜닝/스윕 대상). deps: uv sync --extra gpu.
+# random_state / n_jobs / enable_categorical 는 train_xgb.py 가 주입한다.
+name: xgb
+params:
+  objective: binary:logistic   # 회귀면 reg:squarederror 등으로 교체
+  eval_metric: auc             # config.METRIC 과 일치
+  tree_method: hist            # GPU 면 "gpu_hist" / device=cuda
+  learning_rate: 0.05
+  max_depth: 6
+  subsample: 0.8
+  colsample_bytree: 0.8
+  min_child_weight: 5
+  reg_lambda: 1.0
+num_boost_round: 5000
+early_stopping: 200

@@ -1,0 +1,51 @@
+# ===== Secrets (절대 커밋 금지) =====
+.env
+kaggle.json
+.kaggle/
+**/access_token
+
+# ===== Data & 대용량 산출물 (재생성 가능 → 제외) =====
+data/
+experiments/oof/
+experiments/submissions/
+experiments/tuning/
+experiments/_kaggle_out/
+experiments/outputs/
+experiments/logs/*.run.log
+catboost_info/
+models/
+*.pkl
+*.joblib
+*.ckpt
+
+# ===== 추적 대상 = 작고 큐레이션된 구조화 기록 (일괄 이력) =====
+# experiments/logs/*.json (실험·Feature Registry·Ensemble 기록) 과
+# experiments/submission_history.csv (제출 원장) 는 의도적으로 추적한다.
+# → 대용량 예측 CSV(oof/submissions)는 위에서 제외, 작은 JSON 이력은 커밋.
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.ipynb_checkpoints/
+
+# ===== W&B =====
+wandb/
+
+# ===== Hydra 실행 출력 =====
+outputs/
+multirun/
+.hydra/
+
+# ===== 에디터/환경 dotfiles =====
+.vscode/
+.idea/
+.DS_Store
+
+# ===== Claude Code (에이전트는 추적, 나머지 로컬 설정 제외) =====
+.claude/*
+!.claude/agents/
+.claude.json
