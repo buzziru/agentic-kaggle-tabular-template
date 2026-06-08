@@ -33,4 +33,4 @@ uv run python examples/run_example.py
 ## 실제 프로젝트와의 차이
 
 이 예시는 경로만 `examples/_work/` 로 격리할 뿐, **코드 경로는 실 프로젝트와 동일**하다.
-새 프로젝트를 시작하는 방법은 루트 [README.md](../README.md) 의 "이 템플릿으로 새 프로젝트 시작하기" 참조.
+새 프로젝트를 시작하는 방법은 루트 [README.ko.md](../README.ko.md) 의 "이 템플릿으로 새 프로젝트 시작하기" 참조.

@@ -30,7 +30,7 @@
 2. **피처/모델링** — `src/` 중심의 `.py` 작업. 피처는 **오직 `src/features.py` 한 곳**에서 train/test 에 공통 적용한다(아래 "피처 엔지니어링 — 코드 파편화 방지").
 3. **실행**
   - 베이스라인·중간 실험은 **로컬** `.py` 중심으로 돌린다 (`uv run python -m src.train_lgbm ...`).
-  - 대형 모델·장시간 튜닝은 **GPU 환경**을 쓴다. 환경별 런북 = [kaggle_jobs](docs/wiki/kaggle_jobs.md)·[lightning_jobs](docs/wiki/lightning_jobs.md)·[colab_jobs](docs/wiki/colab_jobs.md). 환경 비교·선택 기준은 [README](README.md) 의 "GPU 실행 / 인프라" 표 참조(중복 방지: 표는 거기 한 곳).
+  - 대형 모델·장시간 튜닝은 **GPU 환경**을 쓴다. 환경별 런북 = [kaggle_jobs](docs/wiki/kaggle_jobs.md)·[lightning_jobs](docs/wiki/lightning_jobs.md)·[colab_jobs](docs/wiki/colab_jobs.md). 환경 비교·선택 기준은 [README.ko.md](README.ko.md) 의 "GPU 실행 / 인프라" 표 참조(중복 방지: 표는 거기 한 곳).
   - ⚠️ 노트북 환경에 올릴 땐 `src/` 코드를 `.ipynb` 로 변환하거나 Dataset 으로 push 후 import 한다. 작성 규칙은 [notebook_conventions](docs/wiki/notebook_conventions.md)(생성기 기반·단일 진실원·fast-fail=전체 실행 전 소규모로 빠르게 실패시켜 검증). 반복되는 변환·실행 오류는 **1회 발생 즉시 가드로 코드화**한다(아래 "외부 인프라 가드").
 4. **실험 결과** — `experiments/logs/<exp_id>.json` 에 구조화 로그를 남긴다(+ W&B, 아래 "실험 추적").
 
@@ -65,7 +65,7 @@
 
 ## 프로젝트 구조
 
-전체 트리와 각 파일 역할은 [README.md](README.md) 를 참조한다. 핵심 아키텍처만:
+전체 트리와 각 파일 역할은 [README.ko.md](README.ko.md) 를 참조한다. 핵심 아키텍처만:
 
 - `src/train_common.py` ★ — 공유 OOF CV 스캐폴드. 모든 모델의 단일 진입점 `run_oof_cv` 가 여기 있다. `train_lgbm.py`(LGBM)·`train_xgb.py` 는 그 어댑터이고, `stack.py` 는 OOF 계약만 소비한다.
 - `src/{config,data,features,encoders,cv,utils,eda_utils}.py` · `conf/`(Hydra 노브) · `scripts/`(게이트) · `docs/wiki/`(런북·결정·회고).
@@ -136,7 +136,7 @@
 
 ## 실행 예시
 
-설치·다운로드·제출 전체는 [README.md](README.md) 를 참조한다. 학습(Hydra: OOF + 제출 + JSON 로그 + W&B):
+설치·다운로드·제출 전체는 [README.ko.md](README.ko.md) 를 참조한다. 학습(Hydra: OOF + 제출 + JSON 로그 + W&B):
 
 ```bash
 uv run python -m src.train_lgbm exp_id=exp_001 "notes='baseline'"
