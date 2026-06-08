@@ -54,8 +54,17 @@ SEQUENCE_COL: str | None = None
 CV_STRATEGY: str = "StratifiedKFold"
 N_FOLDS: int = 5
 
+# ===== 문제 유형 =====
+# 템플릿 기본은 이진분류다. 회귀/다중분류로 쓰려면 이 값을 바꾸고 아래를 함께 맞춘다:
+#   1) conf/model/*.yaml 의 objective/metric (예: regression+rmse, multiclass+multi_logloss)
+#   2) METRIC (아래) + 제출 형식
+#   3) ⚠️ train_xgb.fit_predict 의 예측 형식(predict_proba[:,1] 은 이진 전제) — multiclass/회귀면 수정
+# 점검 항목은 docs/setup_questions.md 체크리스트 참조.
+PROBLEM_TYPE: str = "binary"  # binary / regression / multiclass
+
 # ===== 평가 지표 =====
-METRIC: str = "auc"  # 예: auc / rmse / logloss — 제출 형식에 맞춰 train.py 의 scorer 도 맞출 것
+# ⚠️ PROBLEM_TYPE 과 conf/model/*.yaml 의 objective/metric 을 일치시킬 것. scorer 는 utils.get_scorer 가 이 값으로 자동 결정.
+METRIC: str = "auc"  # 예: auc / rmse / logloss / mae / accuracy
 
 # ===== Kaggle =====
 COMPETITION: str = "{{COMPETITION_SLUG}}"

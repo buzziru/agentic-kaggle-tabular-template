@@ -7,8 +7,12 @@
 - **근거**: train/test 분할 방식 = {{row-level / group-level / 시간순}}. → {{왜 이 CV 가 대회 셋업과 일치하는지}}.
 - ⚠️ 그룹/시간 누수 위험: {{있으면 GroupKFold/TimeSeriesSplit, cv.py 교체}}.
 
-## Q. 지표와 제출 형식은?
-- **답**: {{ROC-AUC / RMSE / ...}}, 제출 = {{확률 / 클래스 / 수치}}.
+## Q. 문제 유형 / 지표 / 제출 형식은?
+- **답**: 문제 유형 = {{binary / regression / multiclass}}, 지표 = {{ROC-AUC / RMSE / ...}}, 제출 = {{확률 / 클래스 / 수치}}.
+- **일치 점검(필수)** — 셋이 어긋나면 점수가 틀린다:
+  - [ ] `config.PROBLEM_TYPE` ↔ `conf/model/*.yaml` 의 objective/metric ↔ `config.METRIC` 일치
+  - [ ] `utils.get_scorer` 가 해당 지표를 지원(없으면 추가)
+  - [ ] 이진분류가 아니면 `src/train_xgb.py::fit_predict` 의 예측 형식(`predict_proba[:,1]`) 수정
 
 ## Q. 컬럼 분류 (config.py)
 - ID: `{{ID_COL}}` / 타깃: `{{TARGET_COL}}`

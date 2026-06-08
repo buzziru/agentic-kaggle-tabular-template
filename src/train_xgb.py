@@ -51,6 +51,11 @@ def run(cfg: DictConfig) -> dict[str, Any]:
         return x, x_test, x_src, cat_dtypes
 
     def fit_predict(x_tr, y_tr, x_va, y_va, x_te, w_tr, cat_cols, cat_dtypes):
+        # ⚠️ 이진분류 전제: 아래 predict_proba(...)[:, 1]. 회귀/다중분류는 이 예측 형식을 수정해야 한다.
+        assert config.PROBLEM_TYPE == "binary", (
+            f"train_xgb.fit_predict 는 이진분류 전제(predict_proba[:,1])다 — "
+            f"PROBLEM_TYPE={config.PROBLEM_TYPE} 면 예측 형식을 고쳐라."
+        )
         x_tr = x_tr.copy()  # 증강 concat 후 고정 cat dtype 재적용
         for col in cat_cols:
             x_tr[col] = x_tr[col].astype(cat_dtypes[col])

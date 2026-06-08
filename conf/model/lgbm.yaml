@@ -1,5 +1,5 @@
 # LightGBM 하이퍼파라미터 (튜닝/스윕 대상).
-# seed / n_jobs / verbose 같은 인프라 값은 train.py 가 src.config 기준으로 주입한다.
+# seed / n_jobs / verbose 같은 인프라 값은 train_lgbm.py 가 src.config 기준으로 주입한다.
 name: lgbm
 params:
   objective: binary      # 회귀면 regression, 다중분류면 multiclass 등으로 교체

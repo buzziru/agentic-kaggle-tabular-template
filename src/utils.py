@@ -162,7 +162,7 @@ def get_scorer(name: str | None = None) -> Callable[[Any, Any], float]:
         return lambda y, p: float(metrics.mean_squared_error(y, p) ** 0.5)
     if name == "mae":
         return lambda y, p: float(metrics.mean_absolute_error(y, p))
-    if name == "accuracy":
+    if name == "accuracy":  # ⚠️ 이진분류 전제(임계 0.5). 다중분류는 argmax 로 바꿀 것.
         return lambda y, p: float(metrics.accuracy_score(y, (np.asarray(p) > 0.5).astype(int)))
     raise ValueError(f"미지원 지표 '{name}' — utils.get_scorer 에 추가하라")
 
