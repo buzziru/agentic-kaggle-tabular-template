@@ -21,6 +21,7 @@ base OOF 를 메타 피처로, **같은 fold 로 메타를 CV 학습**해 meta-O
 from __future__ import annotations
 
 import argparse
+import json
 
 import numpy as np
 import pandas as pd
@@ -30,10 +31,51 @@ from sklearn.metrics import log_loss
 
 from src import config, cv, data, utils
 
+_STRATEGIES = {"StratifiedKFold", "KFold", "GroupKFold"}
+
 
 def _logit(p: np.ndarray) -> np.ndarray:
     p = np.clip(p, 1e-6, 1 - 1e-6)
     return np.log(p / (1 - p))
+
+
+def _resolve_regime(members: list[str]) -> tuple[str, int]:
+    """멤버 로그의 cv_strategy 로 meta-CV 레짐(strategy, n_folds)을 결정·검증한다.
+
+    멤버는 **동일 fold 분할**에서 나온 OOF 여야 스택이 유효하다. 각 멤버 로그의
+    cv_strategy(예: 'StratifiedKFold_7')를 읽어 전원이 일치하는지 확인하고 그 레짐을
+    쓴다 → base 의 실제 n_folds 를 따라간다(config.N_FOLDS 하드코딩으로 인한 override
+    불일치 방지). 로그가 없거나 파싱 불가면 config 기본으로 폴백(경고).
+
+    Args:
+        members: 스택 멤버 exp_id 들.
+
+    Returns:
+        (strategy, n_folds) — cv.get_folds 에 그대로 전달.
+
+    Raises:
+        ValueError: 멤버 간 CV 레짐 불일치 (이질적 fold 는 스택 불가).
+    """
+    labels = []
+    for m in members:
+        p = config.LOG_DIR / f"{m}.json"
+        if not p.exists():
+            print(f"⚠️ [{m}] 로그 없음 — config 기본 레짐({config.CV_STRATEGY}_{config.N_FOLDS})으로 폴백")
+            return config.CV_STRATEGY, config.N_FOLDS
+        labels.append(json.loads(p.read_text()).get("cv_strategy", ""))
+
+    if len(set(labels)) != 1:
+        raise ValueError(
+            f"멤버 CV 레짐 불일치 {dict(zip(members, labels))} — 동일 fold 분할 멤버만 스택 가능 "
+            "(같은 strategy·n_folds·seed 로 재학습하라)."
+        )
+    strategy, _, nf = labels[0].rpartition("_")
+    if strategy not in _STRATEGIES or not nf.isdigit():
+        print(f"⚠️ cv_strategy='{labels[0]}' 파싱 불가(부분 실행 등) — config 기본 레짐으로 폴백")
+        return config.CV_STRATEGY, config.N_FOLDS
+    if strategy != config.CV_STRATEGY:
+        print(f"⚠️ 멤버 전략 '{strategy}' ≠ config.CV_STRATEGY '{config.CV_STRATEGY}' — 멤버(base) 전략을 따른다")
+    return strategy, int(nf)
 
 
 def _load(members: list[str], train: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -115,9 +157,10 @@ def main() -> None:
 
     train = data.load_train()
     X, X_test, y = _load(members, train)
-    # ⚠️ base 학습과 **동일 검증 레짐**으로 meta-OOF 산출 — 전략(CV_STRATEGY)·seed·n_folds·
-    #    groups 를 base 와 일치시킨다(특히 GroupKFold 는 groups 없으면 분할이 어긋난다).
-    folds = cv.get_folds(y, groups=cv.make_groups(train))
+    # ⚠️ base 학습과 **동일 검증 레짐**으로 meta-OOF 산출 — 멤버 로그에서 실제 strategy·n_folds
+    #    를 읽어(override 반영) groups 와 함께 전달. seed 는 config.SEED 로 base 와 공통.
+    strategy, n_folds = _resolve_regime(members)
+    folds = cv.get_folds(y, n_folds=n_folds, groups=cv.make_groups(train), strategy=strategy)
     scorer = utils.get_scorer()                 # config.METRIC 기준
     greater = utils.greater_is_better()
 

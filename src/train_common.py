@@ -1,6 +1,6 @@
 """공유 OOF CV 스캐폴드 — 모든 모델 트레이너의 단일 진입점.
 
-⚠️ 모델 추가 = 이 스캐폴드를 **복사하지 말고** prepare/fit_predict 콜백만 제공한다.
+⚠️ 모델 추가 = 이 스캐폴드를 **복사하지 말고** prepare/fit/predict/get_metadata/save_model 콜백만 제공한다.
    (스택 풀이 커질 때 모델별 트레이너가 각자 골격을 복제하면 리팩토링이 불가능해진다 —
     참조 프로젝트 회고: LGBM 만 별도 경로였다가 노브 divergence 가 반복돼 패리티
     게이트까지 필요했다. 템플릿은 처음부터 LGBM 포함 전 모델을 이 스캐폴드의 어댑터로 둔다.)
@@ -130,7 +130,10 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     best_iters: list[int | None] = []
 
     n_folds = int(cfg.get("n_folds", config.N_FOLDS))  # split 다양성(7/10-fold) 지원, 기본 N_FOLDS
-    folds = cv.get_folds(y, n_folds=n_folds, groups=cv.make_groups(train_df))
+    groups_arr = cv.make_groups(train_df)  # GroupKFold 용 그룹 키 (GROUP_KEYS 없으면 None)
+    folds = cv.get_folds(y, n_folds=n_folds, groups=groups_arr)
+    # group-aware TE: 외부 CV 가 그룹 단위면 내부 OOF-TE 도 같은 그룹으로 분할해야 누수 단위가 일치.
+    te_groups = groups_arr if config.CV_STRATEGY == "GroupKFold" else None
     max_folds = cfg.get("max_folds", None)
     partial = bool(max_folds)  # 스크리닝 = 의사결정용. 스택 멤버 아님 → 아래서 OOF/submission 미저장.
     if partial:
@@ -147,7 +150,8 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
         enc = None
         if te_cols:
             enc = encoders.OOFTargetEncoder(te_cols, smoothing=te_smoothing)
-            x_tr = enc.fit_transform_train(x_tr, y_tr)
+            g_tr = te_groups[tr_idx] if te_groups is not None else None  # fold train 행의 그룹
+            x_tr = enc.fit_transform_train(x_tr, y_tr, groups=g_tr)
             x_va = enc.transform(x_va)
             x_te = enc.transform(x_test)
 

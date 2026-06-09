@@ -13,13 +13,18 @@
 regression(타깃 평균) 모두 동일하게 유효하다. 다만 **내부 OOF 분할 전략이 갈린다** —
 분류는 StratifiedKFold(타깃 분포 보존), 회귀는 KFold(연속 타깃은 계층화 불가). multiclass
 타깃의 단일 평균 인코딩은 의미가 없어 지원하지 않는다(train_common 이 상류에서 막는다).
+
+⚠️ **group-aware**: 외부 CV 가 GroupKFold 면 내부 OOF 분할도 그룹 단위여야 한다 —
+   같은 그룹이 내부 train/valid 양쪽에 걸치면(특히 그룹과 상관된 컬럼을 인코딩할 때)
+   검증 단위(그룹)를 가로지르는 누수가 된다. `fit_transform_train(..., groups=)` 로
+   fold train 행의 그룹을 받으면 GroupKFold 로 내부 분할한다(train_common 이 전달).
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold
 
 from src import config
 
@@ -51,18 +56,23 @@ class OOFTargetEncoder:
         self.global_mean_: float = 0.0
         self.maps_: dict[str, pd.Series] = {}
 
-    def _inner_splits(self, x: pd.DataFrame, y: pd.Series):
-        """내부 OOF 분할을 문제 유형별로 생성한다 (regression-safe).
+    def _inner_splits(self, x: pd.DataFrame, y: pd.Series, groups: np.ndarray | None):
+        """내부 OOF 분할을 생성한다 (group-aware · regression-safe).
 
+        groups 가 주어지면 GroupKFold(그룹 누수 차단)가 우선한다. 아니면 문제 유형별 —
         분류는 StratifiedKFold(타깃 분포 보존), 회귀는 KFold(연속 타깃 계층화 불가).
 
         Args:
             x: train fold 피처.
             y: train fold 타깃.
+            groups: train fold 행의 그룹 키 배열. None 이면 그룹 비인지.
 
         Returns:
             (inner_train_idx, inner_valid_idx) 이터레이터.
         """
+        if groups is not None:
+            # GroupKFold 는 shuffle/seed 없음 — 그룹 단위 결정적 분할(재현성 보장).
+            return GroupKFold(n_splits=self.n_inner).split(x, y, groups)
         if config.PROBLEM_TYPE == "regression":
             kf = KFold(n_splits=self.n_inner, shuffle=True, random_state=self.seed)
             return kf.split(x)
@@ -85,12 +95,16 @@ class OOFTargetEncoder:
             agg["count"] + self.smoothing
         )
 
-    def fit_transform_train(self, x: pd.DataFrame, y: pd.Series) -> pd.DataFrame:
+    def fit_transform_train(
+        self, x: pd.DataFrame, y: pd.Series, groups: np.ndarray | None = None
+    ) -> pd.DataFrame:
         """train fold 를 OOF 인코딩하고, valid/test 용 전체 매핑을 적합한다.
 
         Args:
             x: train fold 피처 (대상 컬럼 포함).
             y: train fold 타깃.
+            groups: train fold 행의 그룹 키 배열 (위치 정렬). 주어지면 내부 OOF 를
+                GroupKFold 로 분할(그룹 누수 차단). None 이면 그룹 비인지.
 
         Returns:
             대상 컬럼이 OOF 인코딩(float)으로 치환된 복사본.
@@ -103,9 +117,9 @@ class OOFTargetEncoder:
         for col in self.cols:
             self.maps_[col] = self._smoothed_map(x[col], y)
 
-        # train 행: 내부 OOF (자기 자신 제외) — 분할 전략은 문제 유형별 (regression-safe)
+        # train 행: 내부 OOF (자기 자신 제외) — group-aware · 문제 유형별 분할
         encoded = {col: np.full(len(x), self.global_mean_, dtype=float) for col in self.cols}
-        for inner_tr, inner_va in self._inner_splits(x, y):
+        for inner_tr, inner_va in self._inner_splits(x, y, groups):
             for col in self.cols:
                 m = self._smoothed_map(x[col].iloc[inner_tr], y.iloc[inner_tr])
                 vals = x[col].iloc[inner_va].astype(object).map(m)
