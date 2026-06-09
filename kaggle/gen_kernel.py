@@ -11,7 +11,7 @@
 True 가 될 수 없게 막는다. GPU 모델로 wandb 가 필요하면 Colab/Lightning 경로를 쓴다.
 
 ▶ 사용 전 채울 것: 아래 OWNER / SRC_DATASET / COMPETITION (+ 필요 시 EXTERNAL_DATASETS),
-  그리고 KERNELS 레지스트리(예시 2개를 본인 trainer/model/features 로 교체·추가).
+  그리고 KERNELS 레지스트리(예시 2개를 본인 model/features 로 교체·추가).
 
 사용:
     python kaggle/gen_kernel.py <name>     # 한 커널 생성
@@ -38,16 +38,16 @@ DATASET_SOURCES = [SRC_DATASET, *EXTERNAL_DATASETS]
 
 # ── 커널 레지스트리 (SSOT) ──────────────────────────────────────────────
 # 노트북마다 다른 건 아래 소수 파라미터뿐. 이 dict 가 단일 진실원.
-# 아래 2개는 패턴 예시 — 본인 trainer/model/features 로 교체·확장한다.
+# 아래 2개는 패턴 예시 — 본인 model/features 로 교체·확장한다.
+# ⚠️ 트레이너는 src.registry 가 model yaml 의 name 으로 선택한다(여기 trainer 필드 불필요).
 KERNELS: dict[str, dict] = {
     "example_lgbm_cpu": dict(
         slug="example-lgbm-cpu",
         title="example lgbm cpu",
         display="LGBM 예시 — CPU OOF",
         exp_id="exp_example_lgbm",
-        trainer="train_lgbm",     # src/train_lgbm.py 의 run()
         features="base",          # conf/features/base.yaml
-        model="lgbm",             # conf/model/lgbm.yaml
+        model="lgbm",             # conf/model/lgbm.yaml — registry 가 model.name 으로 트레이너 선택
         notes="예시 커널: LGBM baseline OOF",
         gpu=False,
         deps=["lightgbm", "hydra-core", "omegaconf", "python-dotenv"],
@@ -58,9 +58,8 @@ KERNELS: dict[str, dict] = {
         title="example nn gpu",
         display="신경망 예시 — GPU(T4) OOF",
         exp_id="exp_example_nn",
-        trainer="train_nn",       # src/train_nn.py 의 run() (torch 모델)
         features="base",
-        model="nn",
+        model="nn",               # src/train_nn.py 작성 후 src/registry.py 에 "nn" 등록 필요
         notes="예시 커널: torch 모델 GPU OOF",
         gpu=True,
         needs_torch=True,         # cell2 가 P100 cu121 torch 처리
@@ -189,7 +188,8 @@ import pandas as pd
 
 sys.path.insert(0, SRC_ROOT)
 from src import config
-from src.{p['trainer']} import run
+from src.registry import get_trainer
+from src.train_common import run_oof_cv
 print('import OK:', config.__file__)
 
 config.TRAIN_PATH = COMP / 'train.csv'
@@ -246,7 +246,7 @@ cfg = OmegaConf.create({{
 }})
 
 t0 = time.time()
-result = run(cfg)
+result = run_oof_cv(cfg, get_trainer(cfg.model.name)(cfg))   # registry 가 model.name 으로 트레이너 선택
 dt = time.time() - t0
 
 log_file = config.LOG_DIR / f'{{EXP_ID}}.json'
@@ -316,9 +316,10 @@ def generate(name: str) -> Path:
         "nbformat": 4,
         "nbformat_minor": 5,
     }
-    (kdir / f"{name}.ipynb").write_text(json.dumps(nb, ensure_ascii=False, indent=1))
+    # ensure_ascii=False 로 한글 유지 → Windows 기본 cp949 회피 위해 utf-8 명시.
+    (kdir / f"{name}.ipynb").write_text(json.dumps(nb, ensure_ascii=False, indent=1), encoding="utf-8")
     (kdir / "kernel-metadata.json").write_text(
-        json.dumps(_metadata(name, p), ensure_ascii=False, indent=2)
+        json.dumps(_metadata(name, p), ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return kdir
 
@@ -327,7 +328,7 @@ def main(argv: list[str]) -> None:
     """CLI 진입점."""
     if not argv or argv[0] == "--list":
         for n, p in KERNELS.items():
-            print(f"  {n:18s} -> {OWNER}/{p['slug']}  (gpu={p['gpu']}, trainer={p['trainer']})")
+            print(f"  {n:18s} -> {OWNER}/{p['slug']}  (gpu={p['gpu']}, model={p['model']})")
         return
     names = list(KERNELS) if argv[0] == "--all" else argv
     for n in names:

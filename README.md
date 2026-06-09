@@ -34,7 +34,7 @@ It is **not** a general-purpose ML starter — read **Scope** below before adopt
 
 ## Why this template
 
-- **A working scaffold.** It's code that runs, not just docs. The shared training skeleton (CV · OOF · logging · submission) lives in `src/train_common.py` alone. A new model doesn't copy the skeleton — it only defines two model-specific callbacks (`prepare` = categorical preprocessing, `fit_predict` = train/predict). So **adding one model takes ~40 lines**, and editing the skeleton updates every model at once. LightGBM (`src/train_lgbm.py`) and XGBoost (`src/train_xgb.py`) are the worked examples.
+- **A working scaffold.** It's code that runs, not just docs. The shared training engine (CV · OOF · logging · submission) lives in `src/train_common.py`'s `run_oof_cv(cfg, trainer)` alone. A unified entry point `src/train.py` selects the trainer class by `model.name` via `src/registry.py`. A new model doesn't copy the skeleton — it only implements the `ModelTrainer` interface's two methods (`prepare` = categorical preprocessing, `fit_predict` = train/predict) and registers itself. So **adding one model takes ~40 lines**, and editing the skeleton updates every model at once. LightGBM (`src/train_lgbm.py`) and XGBoost (`src/train_xgb.py`) are the worked examples.
 - **Post-mortem-driven process guards.** Failures that recurred in real runs are baked into code and check gates: two copies of the same code drifting apart, config knobs diverging, a frozen OOF getting mutated, over-investing in low-ceiling levers. The guards: `scripts/check_fold_inputs.py` (OOF invariance check), a Stop-hook commit reminder, and a "ceiling gate" (tunnel-vision guard).
 - **Leakage-safe by default.** OOF target encoding fit inside the fold only (`src/encoders.py`), row-wise feature examples plus a group/time-series past-only recipe ([docs/feature_engineering.md](docs/feature_engineering.md)), and a CV-must-match-the-split rule are enforced from the start.
 - **Single-stream experiment tracking.** Every model, stack, and ensemble goes through the same JSON log and OOF/submission contract. `scripts/summarize.py` rolls them up into one leaderboard.
@@ -47,7 +47,7 @@ It is **not** a general-purpose ML starter — read **Scope** below before adopt
 | Principle                                                                              | Enforced in                                        |
 | -------------------------------------------------------------------------------------- | -------------------------------------------------- |
 | Features in a single entry point only (`build_features`) — prevents code fragmentation | `src/features.py`, `conf/features/*.yaml` knobs    |
-| Adding a model = an adapter (no scaffold duplication)                                  | `src/train_common.py` + `src/train_<model>.py`     |
+| Adding a model = an adapter (no scaffold duplication)                                  | `src/train_common.py` + `src/registry.py` + `src/train_<model>.py` (entry `src/train.py`) |
 | Frozen member OOF is immutable                                                         | `scripts/check_fold_inputs.py`                     |
 | Record decision rationale (ADR-lite) + mandatory end-of-track retrospective            | `docs/wiki/decisions.md`, `docs/wiki/experiments/` |
 | Be aware of measurement power (don't judge a small Δ on a single seed)                 | `docs/setup_questions.md`, validation strategy     |
@@ -94,7 +94,7 @@ cp .env.example .env                 # fill in KAGGLE_USERNAME/KAGGLE_KEY/WANDB_
 #    - docs/setup_questions.md : setup decisions such as CV-strategy rationale
 
 # 6) Baseline (Hydra: OOF + submission file + JSON log + W&B)
-uv run python -m src.train_lgbm exp_id=exp_001 "notes='baseline'"
+uv run python -m src.train model=lgbm exp_id=exp_001 "notes='baseline'"
 uv run python scripts/summarize.py   # experiment leaderboard
 ```
 
@@ -109,7 +109,7 @@ See [TASK.md](TASK.md) for milestones/gates and [CURRENT_STATUS.md](CURRENT_STAT
 
 ## GPU execution / infrastructure
 
-Run baselines and mid-experiments on local CPU (`uv run python -m src.train_lgbm ...`); offload only large models and long tuning to GPU. The reference project ran on **Lightning AI Studio**, and three execution paths are documented for GPU use. The same `src/` code runs unchanged across environments — only the environment changes — and each runbook captures operational issues and field lessons.
+Run baselines and mid-experiments on local CPU (`uv run python -m src.train model=lgbm ...`); offload only large models and long tuning to GPU. The reference project ran on **Lightning AI Studio**, and three execution paths are documented for GPU use. The same `src/` code runs unchanged across environments — only the environment changes — and each runbook captures operational issues and field lessons.
 
 
 | Path                  | GPU       | Cost                      | Execution                                               | When to use                                                               | Runbook                                          |

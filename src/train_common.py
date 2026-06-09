@@ -5,9 +5,10 @@
     참조 프로젝트 회고: LGBM 만 별도 경로였다가 노브 divergence 가 반복돼 패리티
     게이트까지 필요했다. 템플릿은 처음부터 LGBM 포함 전 모델을 이 스캐폴드의 어댑터로 둔다.)
 
-각 트레이너는 모델별 **prepare**(범주형 전처리)·**fit_predict**(모델 fit/predict)만
-제공하고, 나머지 공통 골격(seed/env/wandb · build_features+feature_builder 훅 ·
-feat/te/cat 컬럼 · fold OOF-TE+증강 concat · OOF/submission/로그 · wandb)은 여기서 처리한다.
+각 트레이너는 `ModelTrainer`(src/registry.py) 인터페이스를 구현해 모델별
+**prepare**(범주형 전처리)·**fit_predict**(모델 fit/predict)만 제공하고, 나머지 공통
+골격(seed/env/wandb · build_features+feature_builder 훅 · feat/te/cat 컬럼 ·
+fold OOF-TE+증강 concat · OOF/submission/로그 · wandb)은 여기서 처리한다.
 
 OOF 계약(스택 풀의 디커플링 경계): 모든 모델은 동일 fold(seed)로
   experiments/oof/<exp_id>.csv = [id, oof]
@@ -20,7 +21,7 @@ OOF 계약(스택 풀의 디커플링 경계): 모든 모델은 동일 fold(seed
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -28,32 +29,23 @@ from omegaconf import DictConfig, OmegaConf
 
 from src import config, cv, data, encoders, features, utils
 
-# prepare(x, x_test, x_src, cat_cols, aug_enabled) -> (x, x_test, x_src, state)
-PrepareFn = Callable[..., tuple[pd.DataFrame, pd.DataFrame, "pd.DataFrame | None", Any]]
-# fit_predict(x_tr, y_tr, x_va, y_va, x_te, w_tr, cat_cols, state) -> (oof_pred, test_pred, best_iter|None)
-FitPredictFn = Callable[..., tuple[np.ndarray, np.ndarray, "int | None"]]
+if TYPE_CHECKING:
+    from src.registry import ModelTrainer
 
 
-def run_oof_cv(
-    cfg: DictConfig,
-    *,
-    prepare: PrepareFn,
-    fit_predict: FitPredictFn,
-    supports_weight: bool = True,
-    log_extra: dict[str, Any] | None = None,
-) -> dict[str, Any]:
+def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     """공유 OOF CV 파이프라인.
 
     Args:
         cfg: Hydra 설정.
-        prepare: 모델별 범주형 전처리(x/x_test/x_src 변환 + state 반환).
-        fit_predict: 모델별 fold 학습/예측(oof·test 확률 + best_iter 반환).
-        supports_weight: 증강 sample_weight 지원 여부(False면 weight≠1.0 에러).
-        log_extra: 실험 로그 params 에 추가할 항목(예: n_estimators).
+        trainer: `ModelTrainer`(src/registry.py) 구현체. prepare/fit_predict 와
+            supports_weight·log_extra() 만 제공하고, fold loop·OOF·metric·artifact·
+            logging 은 여기서 통제한다(모델 분기 금지).
 
     Returns:
         cv_mean, cv_std, fold_scores, log_path.
     """
+    supports_weight = trainer.supports_weight
     seed = cfg.get("seed", config.SEED)  # 모델 seed (seed averaging 노브). fold 분할은 config.SEED 고정.
     utils.seed_everything(seed)
     utils.load_env()
@@ -122,7 +114,7 @@ def run_oof_cv(
         print(f"[augment] 원본 {len(x_src):,}행 추가 (weight={aug_weight})")
 
     # 모델별 범주형 전처리 (어댑터가 제공).
-    x, x_test, x_src, state = prepare(x, x_test, x_src, cat_cols, aug_enabled)
+    x, x_test, x_src, state = trainer.prepare(x, x_test, x_src, cat_cols, aug_enabled)
 
     oof = np.zeros(len(train_df))
     test_pred = np.zeros(len(test_df))
@@ -161,7 +153,7 @@ def run_oof_cv(
             if supports_weight:
                 w_tr = np.concatenate([np.ones(n_comp), np.full(len(x_src_f), aug_weight)])
 
-        oof_pred, test_contrib, best_iter = fit_predict(
+        oof_pred, test_contrib, best_iter = trainer.fit_predict(
             x_tr, y_tr, x_va, y_va, x_te, w_tr, cat_cols, state
         )
         oof[va_idx] = oof_pred
@@ -196,6 +188,7 @@ def run_oof_cv(
     te_note = f"target_encode={te_cols}" if te_cols else "no target encoding"
     logged_iters = best_iters if any(b is not None for b in best_iters) else None
     model_params = OmegaConf.to_container(cfg.model.params, resolve=True)
+    log_extra = trainer.log_extra() if hasattr(trainer, "log_extra") else {}
     # feature recipe = Feature Registry 키 (어떤 빌더·TE·drop·범주 조합으로 만든 피처셋인지).
     feature_recipe = {
         "feature_builder": feature_builder,
@@ -208,7 +201,7 @@ def run_oof_cv(
         model=cfg.model.name,
         features=feat_cols,
         cv_scores=fold_scores,
-        params={**model_params, "seed": seed, "feature_recipe": feature_recipe, **(log_extra or {})},
+        params={**model_params, "seed": seed, "feature_recipe": feature_recipe, **log_extra},
         best_iters=logged_iters,
         notes=notes or f"OOF={oof_score:.6f}; {te_note}",
         kill_criterion=cfg.get("kill_criterion", ""),
