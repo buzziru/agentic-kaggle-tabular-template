@@ -93,6 +93,7 @@ def log_experiment(
     lb_score: float | None = None,
     notes: str = "",
     kill_criterion: str = "",
+    cv_strategy: str | None = None,
     log_dir: Path | None = None,
 ) -> Path:
     """실험 결과를 구조화 JSON 으로 저장한다 (1 실험 = 1 파일).
@@ -108,6 +109,8 @@ def log_experiment(
         lb_score: 리더보드 점수 (제출 후 갱신, 기본 None).
         notes: 자유 메모.
         kill_criterion: 스파이크 전 사전 중단조건(과몰입 구조적 가드).
+        cv_strategy: 실제 사용한 CV 라벨(예: "StratifiedKFold_7"). None 이면 config 기본값.
+            ⚠️ n_folds 오버라이드·부분 실행을 정직하게 남기려면 호출부가 실제 값을 넘긴다.
         log_dir: 로그 저장 디렉터리. None 이면 호출 시점의 `config.LOG_DIR` 사용
             (기본인자 동결 방지 — Kaggle 등에서 런타임 오버라이드가 반영되게).
 
@@ -124,7 +127,7 @@ def log_experiment(
         "git_hash": get_git_hash(),
         "model": model,
         "features": features,
-        "cv_strategy": f"{config.CV_STRATEGY}_{config.N_FOLDS}",
+        "cv_strategy": cv_strategy or f"{config.CV_STRATEGY}_{config.N_FOLDS}",
         "cv_scores": [round(float(s), 6) for s in scores],
         "cv_mean": round(float(scores.mean()), 6),
         "cv_std": round(float(scores.std()), 6),
@@ -137,6 +140,23 @@ def log_experiment(
     path = log_dir / f"{exp_id}.json"
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     return path
+
+
+def cast_target(y: pd.Series) -> pd.Series:
+    """config.PROBLEM_TYPE 에 맞춰 타깃 dtype 을 캐스팅한다.
+
+    회귀는 float, 분류(binary)는 int. 학습/OOF-TE 가 올바른 타깃 타입을 받게 한다
+    (binary 전제 `.astype(int)` 하드코딩 제거 — 회귀 1급 지원).
+
+    Args:
+        y: 원본 타깃 Series.
+
+    Returns:
+        캐스팅된 타깃 Series.
+    """
+    if config.PROBLEM_TYPE == "regression":
+        return y.astype(float)
+    return y.astype(int)
 
 
 def get_scorer(name: str | None = None) -> Callable[[Any, Any], float]:

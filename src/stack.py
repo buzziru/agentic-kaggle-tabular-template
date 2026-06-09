@@ -7,7 +7,10 @@
 모델별 특수 코드가 0 이다 (= "모델 추가로 스택이 특정 코드에 묶이는" 문제 차단).
 
 base OOF 를 메타 피처로, **같은 fold 로 메타를 CV 학습**해 meta-OOF 산출(누수 없음).
-메타러너 4종(equal/rank_mean/logistic/nnls) 비교 + corr 리포트.
+메타러너는 `config.PROBLEM_TYPE` 으로 갈린다(src 와 동일 방향 — binary/regression 1급):
+  - binary:     equal / rank_mean / logistic / nnls(logloss 최소 블렌드)
+  - regression: equal / linear / nnls(MSE 최소 블렌드)   ← rank_mean·logistic 은 binary 전용
+⚠️ multiclass 는 1-D OOF 계약(단일 oof 열) 밖이라 막는다(확장점 — OOF 계약 확장 필요).
 ⚠️ GBDT 메타 금지(피처 소수 과적합). 스택 멤버 추가 판정은 in-sample meta-OOF 가 아니라
    held-out/nested 로(스태커는 단일모델과 별개 레짐 — CLAUDE.md 검증 전략).
 
@@ -22,7 +25,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from scipy.optimize import minimize
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import log_loss
 
 from src import config, cv, data, utils
@@ -36,7 +39,7 @@ def _logit(p: np.ndarray) -> np.ndarray:
 def _load(members: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """base OOF·test 행렬과 타깃을 정렬해 로드한다 (id 정합 = 계약 강제)."""
     train = data.load_train()
-    y = train[config.TARGET_COL].astype(int).to_numpy()
+    y = utils.cast_target(train[config.TARGET_COL]).to_numpy()  # binary=int·regression=float
     sub_ids = data.load_sample_submission()[config.ID_COL]
 
     oof_cols, test_cols = [], []
@@ -51,27 +54,38 @@ def _load(members: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 
 def _nnls_weights(X: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """비음수·합=1 가중을 logloss 최소화로 적합 (블렌드 가중)."""
+    """비음수·합=1 블렌드 가중을 손실 최소화로 적합한다.
+
+    손실은 PROBLEM_TYPE 에 맞춘다 — regression=MSE, binary=logloss. 두 경우 모두
+    가중 블렌드 `X @ w` 가 그대로 예측이라 볼록 결합(convex blend)으로 안전하다.
+    """
     k = X.shape[1]
     w0 = np.full(k, 1 / k)
     cons = {"type": "eq", "fun": lambda w: w.sum() - 1}
     bnds = [(0.0, 1.0)] * k
-    res = minimize(lambda w: log_loss(y, np.clip(X @ w, 1e-7, 1 - 1e-7)),
-                   w0, method="SLSQP", bounds=bnds, constraints=cons)
+    if config.PROBLEM_TYPE == "regression":
+        loss = lambda w: float(np.mean((X @ w - y) ** 2))  # noqa: E731
+    else:
+        loss = lambda w: log_loss(y, np.clip(X @ w, 1e-7, 1 - 1e-7))  # noqa: E731
+    res = minimize(loss, w0, method="SLSQP", bounds=bnds, constraints=cons)
     return res.x
 
 
 def _fit_predict(name: str, Xtr, ytr, Xva) -> np.ndarray:
-    if name == "equal":
+    if name == "equal":  # 단순 평균 (binary·regression 공통)
         return Xva.mean(axis=1)
-    if name == "rank_mean":
+    if name == "rank_mean":  # binary 전용 — 순위 평균(회귀는 스케일을 파괴)
         return np.column_stack([pd.Series(Xva[:, j]).rank().to_numpy() for j in range(Xva.shape[1])]
                                ).mean(axis=1) / len(Xva)
-    if name == "logistic":
+    if name == "logistic":  # binary 전용 — logit 공간 로지스틱 메타
         m = LogisticRegression(C=1.0, max_iter=1000)
         m.fit(_logit(Xtr), ytr)
         return m.predict_proba(_logit(Xva))[:, 1]
-    if name == "nnls":
+    if name == "linear":  # regression 전용 — 비제약 선형 메타
+        m = LinearRegression()
+        m.fit(Xtr, ytr)
+        return m.predict(Xva)
+    if name == "nnls":  # 볼록 블렌드 (가중 손실은 PROBLEM_TYPE 별)
         w = _nnls_weights(Xtr, ytr)
         return Xva @ w
     raise ValueError(name)
@@ -93,6 +107,12 @@ def main() -> None:
     args = ap.parse_args()
     members = [m.strip() for m in args.members.split(",")]
 
+    if config.PROBLEM_TYPE == "multiclass":
+        raise NotImplementedError(
+            "stack 은 1-D OOF 계약(단일 oof 열)만 소비한다 — multiclass 는 멤버 OOF 가 k열이라 "
+            "_load/메타러너/출력 계약을 확장해야 한다(확장점). 템플릿은 binary/regression 1급."
+        )
+
     X, X_test, y = _load(members)
     folds = cv.get_folds(y)  # seed=42, base 와 동일 분할
     scorer = utils.get_scorer()                 # config.METRIC 기준
@@ -105,7 +125,12 @@ def main() -> None:
     print("Pearson corr:")
     print(pd.DataFrame(np.corrcoef(X.T), index=members, columns=members).round(4).to_string())
 
-    results = [_cv_meta(n, X, y, X_test, folds, scorer) for n in ["equal", "rank_mean", "logistic", "nnls"]]
+    metas = (
+        ["equal", "linear", "nnls"]
+        if config.PROBLEM_TYPE == "regression"
+        else ["equal", "rank_mean", "logistic", "nnls"]
+    )
+    results = [_cv_meta(n, X, y, X_test, folds, scorer) for n in metas]
     print("\n=== meta-OOF ===")
     for r in sorted(results, key=lambda d: d["oof_score"], reverse=greater):
         print(f"  {r['name']:>10}: {r['oof_score']:.6f}")

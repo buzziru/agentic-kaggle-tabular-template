@@ -5,12 +5,13 @@
    `train_common.run_oof_cv` 는 **수정하지 않는다** (모델 분기 금지 — 어댑터 패턴).
 
 OOF 계약(스택 풀의 디커플링 경계)·공통 골격은 train_common 한 곳에만 있다.
-구현 클래스는 모델별 차이(범주형 전처리 + fit/predict)만 제공한다.
+구현 클래스는 모델별 차이(범주형 전처리 + fit/predict/get_metadata/save_model)만 제공한다.
 """
 
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import Any, Protocol
 
 import numpy as np
@@ -40,18 +41,36 @@ class ModelTrainer(Protocol):
         """모델별 범주형 전처리. (x, x_test, x_src, state) 를 반환한다."""
         ...
 
-    def fit_predict(
+    def fit(
         self,
         x_tr: pd.DataFrame,
         y_tr: pd.Series,
         x_va: pd.DataFrame,
         y_va: pd.Series,
-        x_te: pd.DataFrame,
         w_tr: "np.ndarray | None",
         cat_cols: list[str],
         state: Any,
-    ) -> tuple[np.ndarray, np.ndarray, "int | None"]:
-        """fold 학습/예측. (oof_pred, test_pred, best_iter|None) 을 반환한다."""
+    ) -> Any:
+        """fold 학습. 적합된 모델 핸들을 반환한다 (predict/get_metadata/save_model 가 소비).
+
+        핸들은 모델 객체 그대로여도 되고, best_iter 등 부가 상태를 묶은 래퍼여도 된다.
+        """
+        ...
+
+    def predict(self, model: Any, x: pd.DataFrame) -> np.ndarray:
+        """적합 모델로 x 를 예측한다.
+
+        config.PROBLEM_TYPE 에 맞는 **1-D** 출력을 낸다 (binary=양성확률, regression=값).
+        multiclass(2-D)는 1-D OOF 계약 밖이라 train_common 이 막는다 — 확장 시 여기와 계약을 함께 고친다.
+        """
+        ...
+
+    def get_metadata(self, model: Any) -> dict[str, Any]:
+        """모델 메타를 반환한다 (예: {"best_iter": int}). early-stopping 없으면 best_iter 생략 가능."""
+        ...
+
+    def save_model(self, model: Any, path: Path) -> None:
+        """적합 모델을 path(확장자 없는 stem)에 저장한다. 모델별 포맷 접미사는 구현이 붙인다."""
         ...
 
     def log_extra(self) -> dict[str, Any]:

@@ -71,6 +71,10 @@ class _DummyXGB:
         CAP.append({"role": "pred", "X": _h(X)})
         return np.zeros((len(X), 2))
 
+    def predict(self, X, *a, **k):  # regression(XGBRegressor) 경로용
+        CAP.append({"role": "pred", "X": _h(X)})
+        return np.zeros(len(X))
+
 
 def _patch_lgbm():
     """LGBM(train_lgbm.py): lgb.train 을 더미로 (함수 패치)."""
@@ -87,10 +91,11 @@ def _patch_lgbm():
 
 
 def _patch_xgb():
-    """XGB(train_xgb.py): XGBClassifier 를 더미로 (클래스 패치)."""
+    """XGB(train_xgb.py): XGBClassifier/XGBRegressor 를 더미로 (클래스 패치)."""
     import src.train_xgb as T
 
     T.xgb.XGBClassifier = _DummyXGB
+    T.xgb.XGBRegressor = _DummyXGB  # regression(PROBLEM_TYPE=regression) 경로도 패치
     return T
 
 

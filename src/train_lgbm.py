@@ -2,7 +2,7 @@
 
 ⚠️ 모델 추가는 이 파일을 **복사하지 않는다**. 이 파일이 곧 "어댑터 패턴" 예시다 —
    새 모델은 src/train_<model>.py 에서 `ModelTrainer`(src/registry.py) 인터페이스를
-   구현(prepare/fit_predict 만)하고 registry 에 등록한다 (예: src/train_xgb.py).
+   구현(prepare/fit/predict/get_metadata/save_model)하고 registry 에 등록한다 (예: src/train_xgb.py).
    공통 골격(seed/CV/OOF-TE/증강/저장/로그)은 train_common 단일 소스라,
    골격을 고쳐도 모든 모델이 한 번에 따라온다.
 
@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import hydra
@@ -60,33 +61,36 @@ class LGBMTrainer:
         # native categorical 안정화 — 공유 헬퍼 단일 소스(복제 금지, src/cat_prep.py).
         return cat_prep.fix_categoricals(x, x_test, x_src, cat_cols)
 
-    def fit_predict(
+    def fit(
         self,
         x_tr: pd.DataFrame,
         y_tr: pd.Series,
         x_va: pd.DataFrame,
         y_va: pd.Series,
-        x_te: pd.DataFrame,
         w_tr: "np.ndarray | None",
         cat_cols: list[str],
         cat_dtypes: dict[str, CategoricalDtype],
-    ) -> tuple[np.ndarray, np.ndarray, int]:
+    ) -> lgb.Booster:
         x_tr = cat_prep.recast(x_tr, cat_cols, cat_dtypes)  # 증강 concat 후 고정 cat dtype 재적용
         dtrain = lgb.Dataset(x_tr, y_tr, categorical_feature=cat_cols, weight=w_tr)
         dvalid = lgb.Dataset(x_va, y_va, categorical_feature=cat_cols)
-        model = lgb.train(
+        return lgb.train(
             {**self.params, "seed": self.cfg.get("seed", config.SEED)},
             dtrain,
             num_boost_round=self.num_boost_round,
             valid_sets=[dvalid],
             callbacks=[lgb.early_stopping(self.early_stopping, verbose=False), lgb.log_evaluation(0)],
         )
-        bi = model.best_iteration
-        return (
-            model.predict(x_va, num_iteration=bi),
-            model.predict(x_te, num_iteration=bi),
-            int(bi),
-        )
+
+    def predict(self, model: lgb.Booster, x: pd.DataFrame) -> np.ndarray:
+        # binary objective=양성확률, regression objective=값 (objective 가 출력 형식을 결정 → PROBLEM_TYPE 무관).
+        return model.predict(x, num_iteration=model.best_iteration)
+
+    def get_metadata(self, model: lgb.Booster) -> dict[str, Any]:
+        return {"best_iter": int(model.best_iteration)}
+
+    def save_model(self, model: lgb.Booster, path: Path) -> None:
+        model.save_model(f"{path}.txt")  # LightGBM 텍스트 포맷
 
 
 def run(cfg: DictConfig) -> dict[str, Any]:

@@ -30,7 +30,7 @@ OOF 교차검증, 스태킹, 누수 가드, 회고 기반 워크플로우를 완
 
 ## 왜 이 템플릿인가
 
-- **동작하는 스캐폴드.** CV·OOF(Out-of-Fold)·로깅·제출 같은 학습 공통 골격은 `src/train_common.py` 의 `run_oof_cv(cfg, trainer)` 한 곳에만 둔다. 통합 진입점 `src/train.py` 가 `src/registry.py` 를 통해 `model.name`→트레이너 클래스를 선택한다. 새 모델은 골격을 복제하지 않고, `ModelTrainer` 인터페이스의 두 메서드(`prepare`=범주형 전처리, `fit_predict`=학습/예측)만 구현하고 registry 에 등록하면 된다. 덕분에 **모델 하나 추가가 약 40줄**로 끝나고, 골격을 고치면 모든 모델에 한 번에 반영된다. LightGBM(`src/train_lgbm.py`)·XGBoost(`src/train_xgb.py`)가 그 예시다.
+- **동작하는 스캐폴드.** CV·OOF(Out-of-Fold)·로깅·제출 같은 학습 공통 골격은 `src/train_common.py` 의 `run_oof_cv(cfg, trainer)` 한 곳에만 둔다. 통합 진입점 `src/train.py` 가 `src/registry.py` 를 통해 `model.name`→트레이너 클래스를 선택한다. 새 모델은 골격을 복제하지 않고, `ModelTrainer` 인터페이스(`prepare`=범주형 전처리, `fit`/`predict`=학습/예측, `get_metadata`·`save_model`)만 구현하고 registry 에 등록하면 된다. 덕분에 **모델 하나 추가가 약 40줄**로 끝나고, 골격을 고치면 모든 모델에 한 번에 반영된다. LightGBM(`src/train_lgbm.py`)·XGBoost(`src/train_xgb.py`)가 그 예시다.
 - **회고 기반 프로세스 가드.** 실전에서 반복된 실패를 코드와 체크 게이트로 박제했다. 예컨대 같은 코드의 2중 사본이 어긋나는 문제, 설정 노브 불일치, 동결돼야 할 OOF 가 바뀌는 문제, 효용 낮은 레버에 대한 과투자다. 대응 장치로 `scripts/check_fold_inputs.py`(OOF 불변 검증), Stop 훅 커밋 리마인더, 천장 게이트(과몰입 방지)를 둔다.
 - **누수 안전 기본값.** fold 내부에서만 fit 하는 OOF 타깃 인코딩(`src/encoders.py`), 행 단위 피처 예시와 그룹/시계열 과거-only 레시피([docs/feature_engineering.md](docs/feature_engineering.md)), CV-분할 일치 원칙을 처음부터 강제한다.
 - **단일 스트림 실험 추적.** 모든 모델·스택·앙상블이 동일한 JSON 로그와 OOF/제출 계약을 거친다. `scripts/summarize.py` 로 전체를 한 리더보드에 모아 본다.

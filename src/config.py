@@ -19,6 +19,7 @@ EXPERIMENTS_DIR: Path = ROOT_DIR / "experiments"
 LOG_DIR: Path = EXPERIMENTS_DIR / "logs"
 OOF_DIR: Path = EXPERIMENTS_DIR / "oof"
 SUBMISSION_DIR: Path = EXPERIMENTS_DIR / "submissions"
+MODEL_DIR: Path = EXPERIMENTS_DIR / "models"  # 적합 모델 저장 (save_models=true 일 때만)
 
 TRAIN_PATH: Path = DATA_DIR / "train.csv"
 TEST_PATH: Path = DATA_DIR / "test.csv"
@@ -47,20 +48,24 @@ GROUP_KEYS: list[str] = []
 SEQUENCE_COL: str | None = None
 
 # ===== CV 설정 =====
-# ⚠️ 데이터 구조에 맞춰 선택하고 train/test 분할 방식과 일치시킨다 (docs/setup_questions.md):
-#   - 독립 행: StratifiedKFold(분류) / KFold(회귀)
-#   - 그룹 누수 위험: GroupKFold (cv.py 교체)
-#   - 시계열: TimeSeriesSplit (cv.py 교체)
+# ⚠️ 정답은 데이터가 정한다 — train/test 분할 방식과 일치시킨다 (docs/setup_questions.md).
+#    이 값은 cv.get_folds 가 디스패치하는 **실제 선택자**다(장식용 상수 아님). 지원 전략:
+#   - "StratifiedKFold": 분류(계층화)              - "KFold": 회귀
+#   - "GroupKFold": 그룹 누수 위험 (config.GROUP_KEYS 필요)
+#   - "TimeSeriesSplit": 시계열 (시간순 정렬 전제)
+# 아래 기본값은 이진분류 템플릿 가정일 뿐 — 프로젝트에 맞게 고른다.
 CV_STRATEGY: str = "StratifiedKFold"
 N_FOLDS: int = 5
 
 # ===== 문제 유형 =====
-# 템플릿 기본은 이진분류다. 회귀/다중분류로 쓰려면 이 값을 바꾸고 아래를 함께 맞춘다:
-#   1) conf/model/*.yaml 의 objective/metric (예: regression+rmse, multiclass+multi_logloss)
-#   2) METRIC (아래) + 제출 형식
-#   3) ⚠️ train_xgb.fit_predict 의 예측 형식(predict_proba[:,1] 은 이진 전제) — multiclass/회귀면 수정
+# 템플릿은 binary/regression 을 1급 지원한다. 바꾸면 아래를 함께 맞춘다:
+#   1) conf/model/*.yaml 의 objective/metric (예: regression+rmse)
+#   2) METRIC (아래) + CV_STRATEGY(회귀는 보통 KFold) + 제출 형식
+#   3) train_<model>.predict 출력: binary=predict_proba[:,1] / regression=predict (PROBLEM_TYPE 로 분기됨)
+# ⚠️ multiclass 는 1-D OOF 계약(OOF 단일 열)을 넘어서므로 train_common 이 NotImplementedError 로
+#    막는다 — 지원하려면 OOF/submission/stack 계약을 k열로 확장해야 한다(확장점).
 # 점검 항목은 docs/setup_questions.md 체크리스트 참조.
-PROBLEM_TYPE: str = "binary"  # binary / regression / multiclass
+PROBLEM_TYPE: str = "binary"  # binary / regression / (multiclass = 확장 필요)
 
 # ===== 평가 지표 =====
 # ⚠️ PROBLEM_TYPE 과 conf/model/*.yaml 의 objective/metric 을 일치시킬 것. scorer 는 utils.get_scorer 가 이 값으로 자동 결정.

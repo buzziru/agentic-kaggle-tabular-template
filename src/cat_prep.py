@@ -2,7 +2,7 @@
 
 ⚠️ 단일 진실원: 이 로직은 여기 한 곳에만 둔다. 트레이너가 복제하지 않는다
    (2중 사본 drift = CLAUDE.md 가 지목한 #1 재발 버그). 새 native-categorical 모델은
-   `prepare` 에서 `fix_categoricals` 를, `fit_predict` 에서 `recast` 를 호출만 한다.
+   `prepare` 에서 `fix_categoricals` 를, `fit` 에서 `recast` 를 호출만 한다.
 
 왜 고정 dtype 인가: train/test(/source) 의 category 집합을 합집합으로 고정해야
 증강 concat 후 category 가 object 로 풀리거나 split 간 카테고리 집합이 어긋나는 것을

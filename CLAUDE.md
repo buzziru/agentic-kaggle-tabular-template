@@ -74,7 +74,7 @@
 
 ## 검증 전략
 
-- **CV 전략·fold 수·seed 를 프로젝트 시작 시 확정**하고 `src/config.py` 에 상수로 고정한다(예: StratifiedKFold 5-fold, seed=42).
+- **CV 전략·fold 수·seed 를 프로젝트 시작 시 데이터에 맞게 확정**하고 `src/config.py` 에 둔다(예: StratifiedKFold 5-fold, seed=42). `CV_STRATEGY` 는 `cv.get_folds` 가 디스패치하는 실제 선택자다(Stratified/KFold/Group/TimeSeries) — 데이터 구조에 맞는 값을 고른다.
 - ⚠️ **데이터 구조에 맞는 CV 를 고른다.** 그룹/시간 누수 위험이 있으면 GroupKFold/TimeSeriesSplit, 아니면 (Stratified)KFold 다. 핵심은 **train/test 분할 방식과 일치**시키는 것 — 근거를 [docs/setup_questions.md](docs/setup_questions.md) 에 남긴다.
 - 모든 모델 비교는 **동일 fold(동일 seed) 기준 OOF 점수**로 한다.
 - ⚠️ **측정 검정력의 한계를 인지한다(필수).** fold 간 std 로 SE 를 추정하고, **|Δ| 가 단일-시드 탐지 임계(~2·SE)보다 작은 결정은 단일 시드로 판정하지 않는다** — 다중 시드로 SE 를 줄이거나, 잔차/stack-add 프레임(노이즈 위에서 판정)으로 본다. 작은 차이를 노이즈에서 '음성'으로 오판하는 것이 흔한 실수다.
@@ -91,7 +91,7 @@
 
 스택 풀은 모델을 계속 추가하며 커진다. 모델마다 학습 루프(seed/CV/OOF-TE/증강/저장/로그)를 **복제**하면, 풀이 커질수록 모델이 특정 코드에 묶여 리팩토링이 불가능해진다(참조 프로젝트 회고: LGBM 만 별도 경로였다가 모델별 설정이 제각각 갈라지는 문제(노브 divergence)가 반복돼 패리티 게이트까지 필요했다). 처음부터 아래 구조로 막는다.
 
-- **단일 스캐폴드 + 어댑터**: 공통 골격은 `src/train_common.py` 의 `run_oof_cv(cfg, trainer)` **한 곳**에만 둔다. 새 모델은 골격을 복사하지 말고, `src/train_<model>.py` 에서 `ModelTrainer`(`src/registry.py`) 인터페이스를 구현한다 — **`prepare`**(범주형 전처리)·**`fit_predict`**(모델 fit/predict) 두 메서드만. 그리고 `src/registry.py` 의 `_REGISTRY` 에 `name→(모듈,클래스)` 한 줄을 등록하면 `src.train model=<name>` 으로 돈다. LGBM(`train_lgbm.py`)·XGB(`train_xgb.py`)가 그 예시이며, 한 모델 추가가 약 40줄이다. 골격(`run_oof_cv`)을 고치면 **모든 모델이 한 번에** 따라온다(별도 경로·모델 분기 금지 — divergence 의 근원).
+- **단일 스캐폴드 + 어댑터**: 공통 골격은 `src/train_common.py` 의 `run_oof_cv(cfg, trainer)` **한 곳**에만 둔다. 새 모델은 골격을 복사하지 말고, `src/train_<model>.py` 에서 `ModelTrainer`(`src/registry.py`) 인터페이스를 구현한다 — **`prepare`**(범주형 전처리)·**`fit`/`predict`**(학습/예측)·**`get_metadata`**(best_iter 등)·**`save_model`**(저장). 그리고 `src/registry.py` 의 `_REGISTRY` 에 `name→(모듈,클래스)` 한 줄을 등록하면 `src.train model=<name>` 으로 돈다. LGBM(`train_lgbm.py`)·XGB(`train_xgb.py`)가 그 예시이며, 한 모델 추가가 약 40줄이다. 골격(`run_oof_cv`)을 고치면 **모든 모델이 한 번에** 따라온다(별도 경로·모델 분기 금지 — divergence 의 근원).
 - **OOF 계약 = 디커플링 경계**: 모든 모델은 동일 fold(seed)로 `experiments/oof/<exp_id>.csv` = `[id, oof]`, `submissions/<exp_id>.csv` = `[id, <target>]` 형식만 산출한다. `src/stack.py` 는 **이 계약만** 소비하고 모델 내부 코드에 의존하지 않는다 → 멤버가 늘어도 스택에 모델별 특수 코드가 0 이다.
 - **frozen 멤버 OOF 불변(필수)**: 한 모델의 OOF 가 스택 풀에 들어가면 그 OOF 는 **동결**된다. `features.py`/`train_common` 리팩토링이 frozen 멤버의 OOF 를 바꾸면 같은-fold 정합이 깨져 풀 전체가 무효가 된다. 리팩토링 전후로 **`uv run python scripts/check_fold_inputs.py`** 를 돌려 fit/predict 입력이 바이트 동일한지 검증한다(GPU·실학습 불필요). 입력이 같으면 결정적 모델이라 OOF 동일이 보장된다.
 - **모델별 FE 는 conf 훅으로**: 모델 전용 피처는 `features.py` 에 `add_<x>_features` 로 두고 `conf/features/*.yaml` 의 `feature_builder` 로 켠다(코드 포크 금지 — "코드 파편화 방지" 와 같은 원칙).

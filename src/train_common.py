@@ -6,7 +6,7 @@
     게이트까지 필요했다. 템플릿은 처음부터 LGBM 포함 전 모델을 이 스캐폴드의 어댑터로 둔다.)
 
 각 트레이너는 `ModelTrainer`(src/registry.py) 인터페이스를 구현해 모델별
-**prepare**(범주형 전처리)·**fit_predict**(모델 fit/predict)만 제공하고, 나머지 공통
+**prepare**(범주형 전처리)·**fit/predict/get_metadata/save_model**만 제공하고, 나머지 공통
 골격(seed/env/wandb · build_features+feature_builder 훅 · feat/te/cat 컬럼 ·
 fold OOF-TE+증강 concat · OOF/submission/로그 · wandb)은 여기서 처리한다.
 
@@ -38,13 +38,19 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
 
     Args:
         cfg: Hydra 설정.
-        trainer: `ModelTrainer`(src/registry.py) 구현체. prepare/fit_predict 와
-            supports_weight·log_extra() 만 제공하고, fold loop·OOF·metric·artifact·
-            logging 은 여기서 통제한다(모델 분기 금지).
+        trainer: `ModelTrainer`(src/registry.py) 구현체. prepare/fit/predict/
+            get_metadata/save_model 와 supports_weight·log_extra() 만 제공하고, fold
+            loop·OOF·metric·artifact·logging 은 여기서 통제한다(모델 분기 금지).
 
     Returns:
         cv_mean, cv_std, fold_scores, log_path.
     """
+    if config.PROBLEM_TYPE == "multiclass":
+        raise NotImplementedError(
+            "multiclass 는 1-D OOF 계약(OOF 단일 열·submission 단일 타깃)을 넘어선다 — "
+            "OOF k열·submission 다열·stack 확장이 필요하다. 템플릿은 binary/regression 을 1급 "
+            "지원하며 multiclass 는 train_common/stack 의 OOF 계약을 확장해야 한다(확장점)."
+        )
     supports_weight = trainer.supports_weight
     seed = cfg.get("seed", config.SEED)  # 모델 seed (seed averaging 노브). fold 분할은 config.SEED 고정.
     utils.seed_everything(seed)
@@ -103,14 +109,14 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
             cat_cols.append(c)
 
     x = train_df[feat_cols]
-    y = train_df[config.TARGET_COL].astype(int)
+    y = utils.cast_target(train_df[config.TARGET_COL])  # PROBLEM_TYPE 별 dtype (binary=int·regression=float)
     x_test = test_df[feat_cols]
 
     x_src = y_src = None
     if aug_enabled:
         src_df = build(data.load_source_augmentation())
         x_src = src_df[feat_cols]
-        y_src = src_df[config.TARGET_COL].astype(int)
+        y_src = utils.cast_target(src_df[config.TARGET_COL])
         print(f"[augment] 원본 {len(x_src):,}행 추가 (weight={aug_weight})")
 
     # 모델별 범주형 전처리 (어댑터가 제공).
@@ -122,11 +128,13 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     best_iters: list[int | None] = []
 
     n_folds = int(cfg.get("n_folds", config.N_FOLDS))  # split 다양성(7/10-fold) 지원, 기본 N_FOLDS
-    folds = cv.get_folds(y, n_folds=n_folds)
+    folds = cv.get_folds(y, n_folds=n_folds, groups=cv.make_groups(train_df))
     max_folds = cfg.get("max_folds", None)
-    if max_folds:
+    partial = bool(max_folds)  # 스크리닝 = 의사결정용. 스택 멤버 아님 → 아래서 OOF/submission 미저장.
+    if partial:
         folds = folds[:max_folds]
-        print(f"[max_folds] 앞 {max_folds}/{n_folds} fold 만 실행 (스크리닝, OOF/submission 부분적)")
+        print(f"[max_folds] 앞 {max_folds}/{n_folds} fold 만 실행 (스크리닝 — OOF/submission 미저장)")
+    save_models = bool(cfg.get("save_models", False))  # 적합 모델 저장 (추론/재사용용, 기본 off)
 
     for fold, (tr_idx, va_idx) in enumerate(folds):
         x_tr, y_tr = x.iloc[tr_idx], y.iloc[tr_idx]
@@ -153,11 +161,13 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
             if supports_weight:
                 w_tr = np.concatenate([np.ones(n_comp), np.full(len(x_src_f), aug_weight)])
 
-        oof_pred, test_contrib, best_iter = trainer.fit_predict(
-            x_tr, y_tr, x_va, y_va, x_te, w_tr, cat_cols, state
-        )
-        oof[va_idx] = oof_pred
-        test_pred += test_contrib / len(folds)
+        model = trainer.fit(x_tr, y_tr, x_va, y_va, w_tr, cat_cols, state)
+        oof[va_idx] = trainer.predict(model, x_va)
+        test_pred += trainer.predict(model, x_te) / len(folds)
+        best_iter = trainer.get_metadata(model).get("best_iter")
+        if save_models:
+            config.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            trainer.save_model(model, config.MODEL_DIR / f"{exp_id}_fold{fold}")
         score = scorer(y_va, oof[va_idx])
         fold_scores.append(score)
         best_iters.append(best_iter)
@@ -169,21 +179,25 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
                 log["best_iter"] = best_iter
             wandb_run.log(log)
 
-    if max_folds:
+    if partial:
         oof_score = float("nan")  # 부분 실행 → 전체 OOF 무의미. fold 점수만 신뢰.
         print(f"\n[부분 실행 {len(folds)}/{n_folds}] fold mean={np.mean(fold_scores):.6f} (OOF 생략)")
     else:
         oof_score = scorer(y, oof)
         print(f"\nOOF = {oof_score:.6f} | mean={np.mean(fold_scores):.6f} std={np.std(fold_scores):.6f}")
 
-    config.OOF_DIR.mkdir(parents=True, exist_ok=True)
-    config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({config.ID_COL: train_df[config.ID_COL], "oof": oof}).to_csv(
-        config.OOF_DIR / f"{exp_id}.csv", index=False
-    )
-    sub = data.load_sample_submission()
-    sub[config.TARGET_COL] = test_pred
-    sub.to_csv(config.SUBMISSION_DIR / f"{exp_id}.csv", index=False)
+    # ⚠️ 스크리닝(partial)은 의사결정용 — 부분 OOF(미실행 fold=0)는 스택 풀을 오염시키므로 저장 금지.
+    if partial:
+        print("[partial] OOF/submission 미저장 (스택 멤버 아님). 로그엔 부분 실행으로 표기.")
+    else:
+        config.OOF_DIR.mkdir(parents=True, exist_ok=True)
+        config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({config.ID_COL: train_df[config.ID_COL], "oof": oof}).to_csv(
+            config.OOF_DIR / f"{exp_id}.csv", index=False
+        )
+        sub = data.load_sample_submission()
+        sub[config.TARGET_COL] = test_pred
+        sub.to_csv(config.SUBMISSION_DIR / f"{exp_id}.csv", index=False)
 
     te_note = f"target_encode={te_cols}" if te_cols else "no target encoding"
     logged_iters = best_iters if any(b is not None for b in best_iters) else None
@@ -196,6 +210,13 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
         "drop_cols": drop_cols,
         "extra_categorical_cols": list(cfg.features.get("extra_categorical_cols", []) or []),
     }
+    # 실제 사용한 fold 수·부분 실행을 정직하게 라벨링 (config.N_FOLDS 하드코딩 불일치 방지).
+    cv_label = f"{config.CV_STRATEGY}_{n_folds}" + (f"_partial{len(folds)}" if partial else "")
+    default_note = (
+        f"partial screening {len(folds)}/{n_folds}; {te_note}"
+        if partial
+        else f"OOF={oof_score:.6f}; {te_note}"
+    )
     log_path = utils.log_experiment(
         exp_id=exp_id,
         model=cfg.model.name,
@@ -203,8 +224,9 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
         cv_scores=fold_scores,
         params={**model_params, "seed": seed, "feature_recipe": feature_recipe, **log_extra},
         best_iters=logged_iters,
-        notes=notes or f"OOF={oof_score:.6f}; {te_note}",
+        notes=notes or default_note,
         kill_criterion=cfg.get("kill_criterion", ""),
+        cv_strategy=cv_label,
     )
     print(f"로그 저장: {log_path}")
 

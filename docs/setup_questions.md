@@ -12,7 +12,7 @@
 - **일치 점검(필수)** — 셋이 어긋나면 점수가 틀린다:
   - [ ] `config.PROBLEM_TYPE` ↔ `conf/model/*.yaml` 의 objective/metric ↔ `config.METRIC` 일치
   - [ ] `utils.get_scorer` 가 해당 지표를 지원(없으면 추가)
-  - [ ] 이진분류가 아니면 `src/train_xgb.py::fit_predict` 의 예측 형식(`predict_proba[:,1]`) 수정
+  - [ ] binary/regression 은 `PROBLEM_TYPE` 으로 자동 분기(`train_<model>.predict`). multiclass 는 1-D OOF 계약 밖이라 train_common 이 막음 — OOF/submission/stack 계약 확장 필요
 
 ## Q. 컬럼 분류 (config.py)
 - ID: `{{ID_COL}}` / 타깃: `{{TARGET_COL}}`
