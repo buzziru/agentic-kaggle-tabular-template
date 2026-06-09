@@ -59,6 +59,7 @@ The rationale behind each principle is in [CLAUDE.md](CLAUDE.md) (the always-on 
 
 ```
 CLAUDE.md          # Always-on project guide (rules·structure·how-to-run) — copied into each new project
+ARCHITECTURE.md    # End-to-end data-flow diagram (Mermaid — train→OOF contract→stack)
 TASK.md            # Milestone / split-task index
 CURRENT_STATUS.md  # Session handoff (current values · next actions, SSOT)
 conf/              # Hydra config — tuning/experiment knobs (config.yaml, model/, features/)

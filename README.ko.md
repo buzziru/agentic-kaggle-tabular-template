@@ -55,6 +55,7 @@ OOF 교차검증, 스태킹, 누수 가드, 회고 기반 워크플로우를 완
 
 ```
 CLAUDE.md          # 프로젝트 상시 가이드 (규칙·구조·실행법) — 새 프로젝트로 복사해 채움
+ARCHITECTURE.md    # 전체 데이터 흐름 다이어그램 (Mermaid — train→OOF 계약→stack)
 TASK.md            # 마일스톤·분할 작업 인덱스
 CURRENT_STATUS.md  # 세션 핸드오프 (현재값·다음 액션 SSOT)
 conf/              # Hydra 설정 — 튜닝/실험 노브 (config.yaml, model/, features/)

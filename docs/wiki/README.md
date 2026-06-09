@@ -15,6 +15,7 @@
 - `experiments/` — 주요 실험 회고 (가설 → 결과 → 결론). exp 단위로 추가.
 - [`kaggle_jobs.md`](kaggle_jobs.md) · [`lightning_jobs.md`](lightning_jobs.md) · [`colab_jobs.md`](colab_jobs.md) — 헤드리스/GPU 실행 런북.
 - [`notebook_conventions.md`](notebook_conventions.md) — Kaggle/Colab 노트북 작성 규칙.
+- [`experiment_tracking.md`](experiment_tracking.md) — 실험 로그·OOF·Registry·Submission 경로/필드 상세.
 
 ## 작성 규칙
 - 한 문서 = 한 주제. 제목에 날짜/이슈번호를 남긴다.
