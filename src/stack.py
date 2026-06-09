@@ -36,9 +36,8 @@ def _logit(p: np.ndarray) -> np.ndarray:
     return np.log(p / (1 - p))
 
 
-def _load(members: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _load(members: list[str], train: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """base OOF·test 행렬과 타깃을 정렬해 로드한다 (id 정합 = 계약 강제)."""
-    train = data.load_train()
     y = utils.cast_target(train[config.TARGET_COL]).to_numpy()  # binary=int·regression=float
     sub_ids = data.load_sample_submission()[config.ID_COL]
 
@@ -112,9 +111,13 @@ def main() -> None:
             "stack 은 1-D OOF 계약(단일 oof 열)만 소비한다 — multiclass 는 멤버 OOF 가 k열이라 "
             "_load/메타러너/출력 계약을 확장해야 한다(확장점). 템플릿은 binary/regression 1급."
         )
+    utils.validate_problem_config()  # problem_type↔metric↔cv_strategy 명백한 불일치 차단
 
-    X, X_test, y = _load(members)
-    folds = cv.get_folds(y)  # seed=42, base 와 동일 분할
+    train = data.load_train()
+    X, X_test, y = _load(members, train)
+    # ⚠️ base 학습과 **동일 검증 레짐**으로 meta-OOF 산출 — 전략(CV_STRATEGY)·seed·n_folds·
+    #    groups 를 base 와 일치시킨다(특히 GroupKFold 는 groups 없으면 분할이 어긋난다).
+    folds = cv.get_folds(y, groups=cv.make_groups(train))
     scorer = utils.get_scorer()                 # config.METRIC 기준
     greater = utils.greater_is_better()
 
@@ -141,7 +144,6 @@ def main() -> None:
     best = (max if greater else min)(results, key=lambda d: d["oof_score"])
     config.OOF_DIR.mkdir(parents=True, exist_ok=True)
     config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
-    train = data.load_train()
     pd.DataFrame({config.ID_COL: train[config.ID_COL], "oof": best["oof"]}).to_csv(
         config.OOF_DIR / f"{args.tag}_{best['name']}.csv", index=False)
     sub = data.load_sample_submission()

@@ -51,6 +51,8 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
             "OOF k열·submission 다열·stack 확장이 필요하다. 템플릿은 binary/regression 을 1급 "
             "지원하며 multiclass 는 train_common/stack 의 OOF 계약을 확장해야 한다(확장점)."
         )
+    # problem_type↔metric↔cv_strategy↔objective 명백한 불일치를 학습 전에 차단(조용한 오채점 방지).
+    utils.validate_problem_config(model_objective=cfg.model.params.get("objective"))
     supports_weight = trainer.supports_weight
     seed = cfg.get("seed", config.SEED)  # 모델 seed (seed averaging 노브). fold 분할은 config.SEED 고정.
     utils.seed_everything(seed)

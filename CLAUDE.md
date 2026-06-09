@@ -75,7 +75,7 @@
 ## 검증 전략
 
 - **CV 전략·fold 수·seed 를 프로젝트 시작 시 데이터에 맞게 확정**하고 `src/config.py` 에 둔다(예: StratifiedKFold 5-fold, seed=42). `CV_STRATEGY` 는 `cv.get_folds` 가 디스패치하는 실제 선택자다(Stratified/KFold/Group/TimeSeries) — 데이터 구조에 맞는 값을 고른다.
-- ⚠️ **데이터 구조에 맞는 CV 를 고른다.** 그룹/시간 누수 위험이 있으면 GroupKFold/TimeSeriesSplit, 아니면 (Stratified)KFold 다. 핵심은 **train/test 분할 방식과 일치**시키는 것 — 근거를 [docs/setup_questions.md](docs/setup_questions.md) 에 남긴다.
+- ⚠️ **데이터 구조에 맞는 CV 를 고른다.** 그룹 누수 위험이 있으면 GroupKFold, 아니면 (Stratified)KFold 다(`cv.get_folds` 공식 지원: Stratified/KFold/Group). 시계열 CV 는 공식 미지원(full-OOF 계약과 불일치 — 필요 시 직접 분기). 핵심은 **train/test 분할 방식과 일치**시키는 것 — 근거를 [docs/setup_questions.md](docs/setup_questions.md) 에 남긴다.
 - 모든 모델 비교는 **동일 fold(동일 seed) 기준 OOF 점수**로 한다.
 - ⚠️ **측정 검정력의 한계를 인지한다(필수).** fold 간 std 로 SE 를 추정하고, **|Δ| 가 단일-시드 탐지 임계(~2·SE)보다 작은 결정은 단일 시드로 판정하지 않는다** — 다중 시드로 SE 를 줄이거나, 잔차/stack-add 프레임(노이즈 위에서 판정)으로 본다. 작은 차이를 노이즈에서 '음성'으로 오판하는 것이 흔한 실수다.
 - ⚠️ **OOF≈LB 는 단일 모델에 한정된 가정이다.** 스태커는 별개 레짐이라 meta-OOF 가 held-out 보다 낙관적일 수 있다. 따라서 스택 멤버 추가는 in-sample meta-OOF 가 아니라 held-out/nested 로 판정하고, 멤버 증가의 meta-overfit 비용을 함께 본다.

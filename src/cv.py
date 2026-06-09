@@ -5,7 +5,9 @@
 방식과 일치시키는 것이 핵심. 지원 전략:
   - "StratifiedKFold": 분류(계층화)         - "KFold": 회귀
   - "GroupKFold": 그룹 누수 위험(groups 필요 — config.GROUP_KEYS → make_groups)
-  - "TimeSeriesSplit": 시계열(시간순 정렬 전제)
+⚠️ 시계열(TimeSeriesSplit)은 **공식 미지원**이다 — 확장형 윈도우는 전체 행을 검증하지
+   못해(초기 구간 미검증) full-OOF 스태킹 계약과 어긋난다. 필요하면 여기 분기를
+   직접 추가하되, OOF 가 부분적임을 감안해 stack 풀에서 분리 운용한다.
 새 전략은 여기 분기에 추가한다.
 """
 
@@ -13,7 +15,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, TimeSeriesSplit
+from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold
 
 from src import config
 
@@ -55,10 +57,10 @@ def get_folds(
                 "GroupKFold 는 groups 가 필요하다 — config.GROUP_KEYS 를 채우고 cv.make_groups 로 전달하라"
             )
         return list(GroupKFold(n_splits=n_folds).split(dummy_x, y, groups))
-    if strategy == "TimeSeriesSplit":
-        # ⚠️ 확장형 윈도우 — 초기 구간은 검증되지 않아 OOF 가 부분적이다. 데이터가 시간순 정렬돼 있어야 한다.
-        return list(TimeSeriesSplit(n_splits=n_folds).split(dummy_x))
-    raise ValueError(f"미지원 CV 전략 '{strategy}' — cv.get_folds 에 분기를 추가하라")
+    raise ValueError(
+        f"미지원 CV 전략 '{strategy}' — 공식 지원: StratifiedKFold/KFold/GroupKFold. "
+        "시계열은 공식 미지원(full-OOF 계약과 불일치) — 필요 시 cv.get_folds 에 직접 분기 추가."
+    )
 
 
 def make_groups(df: pd.DataFrame) -> np.ndarray | None:

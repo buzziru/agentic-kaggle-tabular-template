@@ -193,6 +193,72 @@ def greater_is_better(name: str | None = None) -> bool:
     return name not in {"logloss", "rmse", "mae"}
 
 
+# 문제 유형별 허용 지표·CV 전략 (validate_problem_config 의 일치 검사용).
+_METRIC_BY_PROBLEM: dict[str, set[str]] = {
+    "binary": {"auc", "logloss", "accuracy"},
+    "regression": {"rmse", "mae"},
+    "multiclass": {"accuracy", "logloss"},
+}
+_CV_BY_PROBLEM: dict[str, set[str]] = {
+    "binary": {"StratifiedKFold", "GroupKFold"},
+    "regression": {"KFold", "GroupKFold"},
+    "multiclass": {"StratifiedKFold", "GroupKFold"},
+}
+
+
+def _objective_problem_type(objective: str) -> str | None:
+    """모델 objective 문자열에서 문제 유형을 추정한다 (불일치 검사용). 모호하면 None.
+
+    lgbm/xgb objective 공통 키워드 기반 — "binary"→binary, "multi"→multiclass,
+    회귀 키워드(reg/squared/poisson/tweedie/…)→regression. "reg:logistic" 처럼 "reg"
+    접두가 있으면 회귀로 본다(바이너리 오탐 방지 — 'logistic' 단독은 키로 쓰지 않음).
+    """
+    o = objective.lower()
+    if "multi" in o:
+        return "multiclass"
+    if "binary" in o:
+        return "binary"
+    reg_keys = ("reg", "squared", "rmse", "mae", "mse", "l1", "l2",
+                "poisson", "tweedie", "gamma", "huber", "quantile", "absoluteerror")
+    if any(k in o for k in reg_keys):
+        return "regression"
+    return None
+
+
+def validate_problem_config(model_objective: str | None = None) -> None:
+    """problem_type·metric·cv_strategy·model_objective 의 명백한 불일치를 차단한다.
+
+    셋(+선택적 objective)이 어긋나면 점수가 조용히 틀린다(예: 회귀에 StratifiedKFold,
+    binary 에 rmse, objective=regression 인데 PROBLEM_TYPE=binary). 학습/스택 시작 전에
+    호출해 빠르게 실패시킨다 — 명백한 모순만 잡고 모호하면 통과시킨다(오탐 회피).
+
+    Args:
+        model_objective: conf 모델 objective (예: "binary"/"regression"). None 이면 생략.
+
+    Raises:
+        ValueError: 알려진 불일치(미지원 PROBLEM_TYPE 포함).
+    """
+    pt = config.PROBLEM_TYPE
+    if pt not in _METRIC_BY_PROBLEM:
+        raise ValueError(f"config.PROBLEM_TYPE='{pt}' 미지원 — binary/regression/multiclass 중 하나")
+    if config.METRIC not in _METRIC_BY_PROBLEM[pt]:
+        raise ValueError(
+            f"PROBLEM_TYPE={pt} ↔ METRIC='{config.METRIC}' 불일치 — 허용: {sorted(_METRIC_BY_PROBLEM[pt])}"
+        )
+    if config.CV_STRATEGY not in _CV_BY_PROBLEM[pt]:
+        raise ValueError(
+            f"PROBLEM_TYPE={pt} ↔ CV_STRATEGY='{config.CV_STRATEGY}' 불일치 — "
+            f"허용: {sorted(_CV_BY_PROBLEM[pt])} (예: 회귀에 StratifiedKFold 는 연속 타깃 계층화 불가)"
+        )
+    if model_objective:
+        obj_pt = _objective_problem_type(model_objective)
+        if obj_pt is not None and obj_pt != pt:
+            raise ValueError(
+                f"PROBLEM_TYPE={pt} ↔ model objective='{model_objective}'(→{obj_pt}) 불일치 — "
+                "conf/model/*.yaml 의 objective 를 PROBLEM_TYPE 에 맞춰라"
+            )
+
+
 def load_logs(log_dir: Path | None = None) -> pd.DataFrame:
     """experiments/logs/*.json 전부를 한 표로 집계한다 (통합 리더보드/레지스트리 뷰).
 

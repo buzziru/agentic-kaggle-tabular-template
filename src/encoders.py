@@ -8,13 +8,18 @@
 
 스무딩(smoothing): 표본이 적은 범주는 전역 평균 쪽으로 수축시켜 분산을 줄인다.
 고카디널리티 범주형(예: 사용자/상품 ID)에 native categorical 보다 효과적일 수 있다.
+
+문제 유형(`config.PROBLEM_TYPE`): 인코딩 값은 "범주별 타깃 평균"이라 binary(양성률)·
+regression(타깃 평균) 모두 동일하게 유효하다. 다만 **내부 OOF 분할 전략이 갈린다** —
+분류는 StratifiedKFold(타깃 분포 보존), 회귀는 KFold(연속 타깃은 계층화 불가). multiclass
+타깃의 단일 평균 인코딩은 의미가 없어 지원하지 않는다(train_common 이 상류에서 막는다).
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold, StratifiedKFold
 
 from src import config
 
@@ -45,6 +50,24 @@ class OOFTargetEncoder:
         self.seed = seed
         self.global_mean_: float = 0.0
         self.maps_: dict[str, pd.Series] = {}
+
+    def _inner_splits(self, x: pd.DataFrame, y: pd.Series):
+        """내부 OOF 분할을 문제 유형별로 생성한다 (regression-safe).
+
+        분류는 StratifiedKFold(타깃 분포 보존), 회귀는 KFold(연속 타깃 계층화 불가).
+
+        Args:
+            x: train fold 피처.
+            y: train fold 타깃.
+
+        Returns:
+            (inner_train_idx, inner_valid_idx) 이터레이터.
+        """
+        if config.PROBLEM_TYPE == "regression":
+            kf = KFold(n_splits=self.n_inner, shuffle=True, random_state=self.seed)
+            return kf.split(x)
+        skf = StratifiedKFold(n_splits=self.n_inner, shuffle=True, random_state=self.seed)
+        return skf.split(x, y)
 
     def _smoothed_map(self, x_col: pd.Series, y: pd.Series) -> pd.Series:
         """한 컬럼의 (범주 → 스무딩된 타깃 평균) 매핑을 만든다.
@@ -80,10 +103,9 @@ class OOFTargetEncoder:
         for col in self.cols:
             self.maps_[col] = self._smoothed_map(x[col], y)
 
-        # train 행: 내부 OOF (자기 자신 제외)
+        # train 행: 내부 OOF (자기 자신 제외) — 분할 전략은 문제 유형별 (regression-safe)
         encoded = {col: np.full(len(x), self.global_mean_, dtype=float) for col in self.cols}
-        skf = StratifiedKFold(n_splits=self.n_inner, shuffle=True, random_state=self.seed)
-        for inner_tr, inner_va in skf.split(x, y):
+        for inner_tr, inner_va in self._inner_splits(x, y):
             for col in self.cols:
                 m = self._smoothed_map(x[col].iloc[inner_tr], y.iloc[inner_tr])
                 vals = x[col].iloc[inner_va].astype(object).map(m)

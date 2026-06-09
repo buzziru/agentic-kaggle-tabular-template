@@ -3,9 +3,10 @@
 > 대회/과제 시작 시 한 번 정하고 끝까지 일관 유지하는 구조적 결정. 근거를 남긴다.
 
 ## Q. CV 전략은? (가장 중요)
-- **답**: {{StratifiedKFold / GroupKFold / TimeSeriesSplit / KFold}}, {{N}}-fold, seed=42.
-- **근거**: train/test 분할 방식 = {{row-level / group-level / 시간순}}. → {{왜 이 CV 가 대회 셋업과 일치하는지}}.
-- ⚠️ 그룹/시간 누수 위험: {{있으면 GroupKFold/TimeSeriesSplit, cv.py 교체}}.
+- **답**: {{StratifiedKFold / GroupKFold / KFold}}, {{N}}-fold, seed=42. (`config.CV_STRATEGY`)
+- **근거**: train/test 분할 방식 = {{row-level / group-level}}. → {{왜 이 CV 가 대회 셋업과 일치하는지}}.
+- ⚠️ 그룹 누수 위험: {{있으면 GroupKFold, config.GROUP_KEYS 채움}}.
+- ⚠️ 시계열은 **공식 미지원**(확장형 윈도우가 full-OOF 스태킹 계약과 불일치) — 필요 시 `cv.get_folds` 에 직접 분기 추가.
 
 ## Q. 문제 유형 / 지표 / 제출 형식은?
 - **답**: 문제 유형 = {{binary / regression / multiclass}}, 지표 = {{ROC-AUC / RMSE / ...}}, 제출 = {{확률 / 클래스 / 수치}}.

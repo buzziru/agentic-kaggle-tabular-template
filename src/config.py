@@ -49,10 +49,10 @@ SEQUENCE_COL: str | None = None
 
 # ===== CV 설정 =====
 # ⚠️ 정답은 데이터가 정한다 — train/test 분할 방식과 일치시킨다 (docs/setup_questions.md).
-#    이 값은 cv.get_folds 가 디스패치하는 **실제 선택자**다(장식용 상수 아님). 지원 전략:
+#    이 값은 cv.get_folds 가 디스패치하는 **실제 선택자**다(장식용 상수 아님). 공식 지원:
 #   - "StratifiedKFold": 분류(계층화)              - "KFold": 회귀
 #   - "GroupKFold": 그룹 누수 위험 (config.GROUP_KEYS 필요)
-#   - "TimeSeriesSplit": 시계열 (시간순 정렬 전제)
+#   ⚠️ 시계열(TimeSeriesSplit)은 공식 미지원 — full-OOF 스태킹 계약과 어긋난다(cv.py 참조).
 # 아래 기본값은 이진분류 템플릿 가정일 뿐 — 프로젝트에 맞게 고른다.
 CV_STRATEGY: str = "StratifiedKFold"
 N_FOLDS: int = 5
