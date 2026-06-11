@@ -58,18 +58,23 @@ CV_STRATEGY: str = "StratifiedKFold"
 N_FOLDS: int = 5
 
 # ===== 문제 유형 =====
-# 템플릿은 binary/regression 을 1급 지원한다. 바꾸면 아래를 함께 맞춘다:
-#   1) conf/model/*.yaml 의 objective/metric (예: regression+rmse)
-#   2) METRIC (아래) + CV_STRATEGY(회귀는 보통 KFold) + 제출 형식
-#   3) train_<model>.predict 출력: binary=predict_proba[:,1] / regression=predict (PROBLEM_TYPE 로 분기됨)
-# ⚠️ multiclass 는 1-D OOF 계약(OOF 단일 열)을 넘어서므로 train_common 이 NotImplementedError 로
-#    막는다 — 지원하려면 OOF/submission/stack 계약을 k열로 확장해야 한다(확장점).
+# 템플릿은 binary/regression/multiclass 를 단일모델 1급 지원한다. 바꾸면 아래를 함께 맞춘다:
+#   1) conf/model/*.yaml 의 objective/metric (예: regression+rmse, multiclass+multi_logloss)
+#   2) METRIC (아래) + CV_STRATEGY(회귀는 보통 KFold, 분류는 StratifiedKFold) + 제출 형식
+#   3) train_<model>.predict 출력: binary=predict_proba[:,1] / regression=predict /
+#      multiclass=predict_proba(n,K) (PROBLEM_TYPE 로 분기됨)
+# ⚠️ multiclass: OOF 는 K개 확률 열(experiments/oof/<id>.csv = [id, oof_<label>...]), 제출은
+#    단일 예측 라벨([id, <target>]), 라벨 인코딩(원라벨↔0..K-1)은 train_common 이 처리한다.
+#    스태킹(src.stack)은 아직 multiclass 미지원(후속) — 단일모델 파이프라인만 1급.
 # 점검 항목은 docs/setup_questions.md 체크리스트 참조.
-PROBLEM_TYPE: str = "binary"  # binary / regression / (multiclass = 확장 필요)
+PROBLEM_TYPE: str = "binary"  # binary / regression / multiclass
+
+# multiclass 전용: 클래스 수. None = train 라벨에서 추론. 설정 시 라벨 수와 일치 검증(불일치 raise).
+N_CLASSES: int | None = None
 
 # ===== 평가 지표 =====
 # ⚠️ PROBLEM_TYPE 과 conf/model/*.yaml 의 objective/metric 을 일치시킬 것. scorer 는 utils.get_scorer 가 이 값으로 자동 결정.
-METRIC: str = "auc"  # 예: auc / rmse / logloss / mae / accuracy
+METRIC: str = "auc"  # 예: auc / rmse / logloss / mae / accuracy / balanced_accuracy(multiclass)
 
 # ===== Kaggle =====
 COMPETITION: str = "{{COMPETITION_SLUG}}"

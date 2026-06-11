@@ -84,10 +84,7 @@ class XGBTrainer:
             return model.predict(x, iteration_range=rng)
         if config.PROBLEM_TYPE == "binary":
             return model.predict_proba(x, iteration_range=rng)[:, 1]
-        raise NotImplementedError(
-            f"train_xgb.predict: PROBLEM_TYPE={config.PROBLEM_TYPE} 미지원 — "
-            "multiclass 는 predict_proba(2-D) 반환 형식으로 확장하라."
-        )
+        return model.predict_proba(x, iteration_range=rng)  # multiclass: (n, K) 확률
 
     def get_metadata(self, model: "xgb.XGBModel") -> dict[str, Any]:
         return {"best_iter": int(model.best_iteration)}

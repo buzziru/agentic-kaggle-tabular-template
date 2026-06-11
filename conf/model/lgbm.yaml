@@ -2,8 +2,8 @@
 # seed / n_jobs / verbose 같은 인프라 값은 train_lgbm.py 가 src.config 기준으로 주입한다.
 name: lgbm
 params:
-  objective: binary      # 회귀면 regression, 다중분류면 multiclass 등으로 교체
-  metric: auc            # config.METRIC 과 일치시킬 것
+  objective: binary      # 회귀=regression · 다중분류=multiclass (num_class 는 train_lgbm 이 자동 주입)
+  metric: auc            # config.METRIC 과 일치 (다중분류=multi_logloss)
   boosting_type: gbdt
   learning_rate: 0.05
   num_leaves: 63

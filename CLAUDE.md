@@ -97,7 +97,7 @@
 모델마다 학습 루프(seed/CV/OOF-TE/증강/저장/로그)를 **복제**하면 풀이 커질수록 모델이 특정 코드에 묶여 리팩토링이 막힌다(참조 회고: LGBM 별도 경로 → 노브 divergence 반복 → 패리티 게이트까지 필요). 처음부터 어댑터로 막는다.
 
 - **단일 스캐폴드 + 어댑터**: 공통 골격은 `src/train_common.py` 의 `run_oof_cv(cfg, trainer)` **한 곳**에만 둔다. 새 모델은 골격을 복사하지 말고 `src/train_<model>.py` 에서 `ModelTrainer`(`src/registry.py`) 인터페이스(`prepare`/`fit`/`predict`/`get_metadata`/`save_model`)를 구현하고 `_REGISTRY` 에 한 줄 등록한다 → 한 모델 추가 ≈ 40줄(LGBM·XGB 예시). 골격을 고치면 **모든 모델이 한 번에** 따라온다(별도 경로·모델 분기 금지 = divergence 근원). 전체 흐름은 [ARCHITECTURE.md](ARCHITECTURE.md).
-- **OOF 계약 = 디커플링 경계**: 모든 모델은 동일 fold(seed)로 `experiments/oof/<exp_id>.csv`=`[id, oof]`, `submissions/<exp_id>.csv`=`[id, <target>]` 만 산출한다. `src/stack.py` 는 **이 계약만** 소비 → 멤버가 늘어도 스택에 모델별 특수 코드가 0.
+- **OOF 계약 = 디커플링 경계**: 모든 모델은 동일 fold(seed)로 `experiments/oof/<exp_id>.csv`=`[id, oof]`, `submissions/<exp_id>.csv`=`[id, <target>]` 만 산출한다. `src/stack.py` 는 **이 계약만** 소비 → 멤버가 늘어도 스택에 모델별 특수 코드가 0. ⚠️ multiclass 는 OOF 가 K개 확률 열(`oof_<label>`)·제출은 단일 예측 라벨이고, 스태킹은 아직 미지원(단일모델만 1급).
 - **frozen 멤버 OOF 불변(필수)**: 스택 풀에 든 OOF 는 **동결**된다 — `features.py`/`train_common` 리팩토링이 frozen 멤버 OOF 를 바꾸면 같은-fold 정합이 깨져 풀이 무효가 된다. 리팩토링 전후로 **`scripts/check_fold_inputs.py`** 로 fit/predict 입력이 바이트 동일한지 검증한다(GPU·실학습 불필요 — 입력 같으면 결정적 모델이라 OOF 동일 보장).
 - **모델별 FE 는 conf 훅으로**: 모델 전용 피처는 `features.py` 에 `add_<x>_features` 로 두고 `conf/features/*.yaml` 의 `feature_builder` 로 켠다(코드 포크 금지).
 

@@ -60,8 +60,8 @@ class ModelTrainer(Protocol):
     def predict(self, model: Any, x: pd.DataFrame) -> np.ndarray:
         """적합 모델로 x 를 예측한다.
 
-        config.PROBLEM_TYPE 에 맞는 **1-D** 출력을 낸다 (binary=양성확률, regression=값).
-        multiclass(2-D)는 1-D OOF 계약 밖이라 train_common 이 막는다 — 확장 시 여기와 계약을 함께 고친다.
+        config.PROBLEM_TYPE 에 맞는 출력을 낸다: binary=양성확률·regression=값(1-D),
+        multiclass=클래스 확률 (n, K) 2-D (클래스 정렬 0..K-1). train_common 이 shape 에 맞춰 OOF 를 채운다.
         """
         ...
 

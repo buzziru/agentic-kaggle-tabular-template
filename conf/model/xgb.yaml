@@ -2,8 +2,8 @@
 # random_state / n_jobs / enable_categorical 는 train_xgb.py 가 주입한다.
 name: xgb
 params:
-  objective: binary:logistic   # 회귀면 reg:squarederror 등으로 교체
-  eval_metric: auc             # config.METRIC 과 일치
+  objective: binary:logistic   # 회귀=reg:squarederror · 다중분류=multi:softprob (num_class 자동 추론)
+  eval_metric: auc             # config.METRIC 과 일치 (다중분류=mlogloss)
   tree_method: hist            # GPU 면 "gpu_hist" / device=cuda
   learning_rate: 0.05
   max_depth: 6

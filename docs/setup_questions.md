@@ -13,7 +13,7 @@
 - **일치 점검(필수)** — 셋이 어긋나면 점수가 틀린다:
   - [ ] `config.PROBLEM_TYPE` ↔ `conf/model/*.yaml` 의 objective/metric ↔ `config.METRIC` 일치
   - [ ] `utils.get_scorer` 가 해당 지표를 지원(없으면 추가)
-  - [ ] binary/regression 은 `PROBLEM_TYPE` 으로 자동 분기(`train_<model>.predict`). multiclass 는 1-D OOF 계약 밖이라 train_common 이 막음 — OOF/submission/stack 계약 확장 필요
+  - [ ] binary/regression/multiclass 는 `PROBLEM_TYPE` 으로 자동 분기(`train_<model>.predict`). multiclass=OOF K개 확률열(`oof_<label>`)·제출 단일 라벨·라벨 0..K-1 인코딩 자동·`balanced_accuracy` 등. ⚠️ 스태킹(`src.stack`)은 아직 multiclass 미지원(단일모델만)
 
 ## Q. 컬럼 분류 (config.py)
 - ID: `{{ID_COL}}` / 타깃: `{{TARGET_COL}}`

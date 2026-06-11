@@ -72,10 +72,14 @@ class LGBMTrainer:
         cat_dtypes: dict[str, CategoricalDtype],
     ) -> lgb.Booster:
         x_tr = cat_prep.recast(x_tr, cat_cols, cat_dtypes)  # 증강 concat 후 고정 cat dtype 재적용
+        params = {**self.params, "seed": self.cfg.get("seed", config.SEED)}
+        if config.PROBLEM_TYPE == "multiclass":  # objective/num_class 자동 주입(conf override 보존)
+            params.setdefault("objective", "multiclass")
+            params.setdefault("num_class", config.N_CLASSES)
         dtrain = lgb.Dataset(x_tr, y_tr, categorical_feature=cat_cols, weight=w_tr)
         dvalid = lgb.Dataset(x_va, y_va, categorical_feature=cat_cols)
         return lgb.train(
-            {**self.params, "seed": self.cfg.get("seed", config.SEED)},
+            params,
             dtrain,
             num_boost_round=self.num_boost_round,
             valid_sets=[dvalid],

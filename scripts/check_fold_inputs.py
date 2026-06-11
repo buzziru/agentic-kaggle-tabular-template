@@ -53,6 +53,8 @@ class _DummyBooster:
 
     def predict(self, X, *a, **k):
         CAP.append({"role": "pred", "X": _h(X)})
+        if config.PROBLEM_TYPE == "multiclass":  # lgbm multiclass = (n, K)
+            return np.zeros((len(X), config.N_CLASSES or 2))
         return np.zeros(len(X))
 
 
@@ -69,7 +71,8 @@ class _DummyXGB:
 
     def predict_proba(self, X, *a, **k):
         CAP.append({"role": "pred", "X": _h(X)})
-        return np.zeros((len(X), 2))
+        k_cls = config.N_CLASSES if config.PROBLEM_TYPE == "multiclass" and config.N_CLASSES else 2
+        return np.zeros((len(X), k_cls))
 
     def predict(self, X, *a, **k):  # regression(XGBRegressor) 경로용
         CAP.append({"role": "pred", "X": _h(X)})

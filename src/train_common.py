@@ -45,14 +45,9 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     Returns:
         cv_mean, cv_std, fold_scores, log_path.
     """
-    if config.PROBLEM_TYPE == "multiclass":
-        raise NotImplementedError(
-            "multiclass 는 1-D OOF 계약(OOF 단일 열·submission 단일 타깃)을 넘어선다 — "
-            "OOF k열·submission 다열·stack 확장이 필요하다. 템플릿은 binary/regression 을 1급 "
-            "지원하며 multiclass 는 train_common/stack 의 OOF 계약을 확장해야 한다(확장점)."
-        )
     # problem_type↔metric↔cv_strategy↔objective 명백한 불일치를 학습 전에 차단(조용한 오채점 방지).
     utils.validate_problem_config(model_objective=cfg.model.params.get("objective"))
+    is_multiclass = config.PROBLEM_TYPE == "multiclass"  # OOF=K열·제출=단일라벨 분기
     supports_weight = trainer.supports_weight
     seed = cfg.get("seed", config.SEED)  # 모델 seed (seed averaging 노브). fold 분할은 config.SEED 고정.
     utils.seed_everything(seed)
@@ -104,6 +99,11 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     feat_cols = [c for c in feat_cols if c not in drop_cols]
 
     te_cols = [c for c in cfg.features.target_encode_cols if c in feat_cols]
+    if is_multiclass and te_cols:
+        raise ValueError(
+            "multiclass 는 스칼라 타깃 평균 인코딩(OOF-TE)이 무의미하다 — "
+            "features.target_encode_cols 를 비우고 native categorical(CATEGORICAL_COLS)로 처리하라."
+        )
     cat_cols = [c for c in config.CATEGORICAL_COLS if c in feat_cols and c not in te_cols]
     # 모델별 추가 범주형 (extra_categorical_cols). 기본 없음 → 미지정 모델/실험은 불변.
     for c in cfg.features.get("extra_categorical_cols", []) or []:
@@ -111,21 +111,36 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
             cat_cols.append(c)
 
     x = train_df[feat_cols]
-    y = utils.cast_target(train_df[config.TARGET_COL])  # PROBLEM_TYPE 별 dtype (binary=int·regression=float)
+    if is_multiclass:
+        # 원라벨(문자열 등) ↔ 0..K-1 인코딩. 제출 역변환·OOF 열명에 label_map 사용.
+        label_map = utils.resolve_label_map(train_df[config.TARGET_COL])
+        y = label_map.encode(train_df[config.TARGET_COL])
+        config.N_CLASSES = label_map.n_classes  # 트레이너(lgbm num_class)가 읽음
+    else:
+        label_map = None
+        y = utils.cast_target(train_df[config.TARGET_COL])  # PROBLEM_TYPE 별 dtype (binary=int·regression=float)
     x_test = test_df[feat_cols]
 
     x_src = y_src = None
     if aug_enabled:
         src_df = build(data.load_source_augmentation())
         x_src = src_df[feat_cols]
-        y_src = utils.cast_target(src_df[config.TARGET_COL])
+        y_src = (
+            label_map.encode(src_df[config.TARGET_COL])
+            if is_multiclass
+            else utils.cast_target(src_df[config.TARGET_COL])
+        )
         print(f"[augment] 원본 {len(x_src):,}행 추가 (weight={aug_weight})")
 
     # 모델별 범주형 전처리 (어댑터가 제공).
     x, x_test, x_src, state = trainer.prepare(x, x_test, x_src, cat_cols, aug_enabled)
 
-    oof = np.zeros(len(train_df))
-    test_pred = np.zeros(len(test_df))
+    if is_multiclass:  # OOF = (n, K) 확률 행렬, 제출은 argmax 라벨
+        oof = np.zeros((len(train_df), label_map.n_classes))
+        test_pred = np.zeros((len(test_df), label_map.n_classes))
+    else:
+        oof = np.zeros(len(train_df))
+        test_pred = np.zeros(len(test_df))
     fold_scores: list[float] = []
     best_iters: list[int | None] = []
 
@@ -198,11 +213,20 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     else:
         config.OOF_DIR.mkdir(parents=True, exist_ok=True)
         config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame({config.ID_COL: train_df[config.ID_COL], "oof": oof}).to_csv(
-            config.OOF_DIR / f"{exp_id}.csv", index=False
-        )
         sub = data.load_sample_submission()
-        sub[config.TARGET_COL] = test_pred
+        if is_multiclass:
+            # OOF = K개 확률 열(원라벨명), 제출 = argmax → 원라벨 단일 컬럼.
+            oof_df = pd.DataFrame(
+                {f"oof_{lbl}": oof[:, i] for i, lbl in enumerate(label_map.classes_)}
+            )
+            oof_df.insert(0, config.ID_COL, train_df[config.ID_COL].to_numpy())
+            oof_df.to_csv(config.OOF_DIR / f"{exp_id}.csv", index=False)
+            sub[config.TARGET_COL] = label_map.decode(test_pred.argmax(axis=1))
+        else:
+            pd.DataFrame({config.ID_COL: train_df[config.ID_COL], "oof": oof}).to_csv(
+                config.OOF_DIR / f"{exp_id}.csv", index=False
+            )
+            sub[config.TARGET_COL] = test_pred
         sub.to_csv(config.SUBMISSION_DIR / f"{exp_id}.csv", index=False)
 
     te_note = f"target_encode={te_cols}" if te_cols else "no target encoding"

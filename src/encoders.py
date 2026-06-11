@@ -12,7 +12,7 @@
 문제 유형(`config.PROBLEM_TYPE`): 인코딩 값은 "범주별 타깃 평균"이라 binary(양성률)·
 regression(타깃 평균) 모두 동일하게 유효하다. 다만 **내부 OOF 분할 전략이 갈린다** —
 분류는 StratifiedKFold(타깃 분포 보존), 회귀는 KFold(연속 타깃은 계층화 불가). multiclass
-타깃의 단일 평균 인코딩은 의미가 없어 지원하지 않는다(train_common 이 상류에서 막는다).
+타깃의 단일 평균 인코딩은 의미가 없어 지원하지 않는다(train_common 호출부가 te_cols 사용 시 차단).
 
 ⚠️ **group-aware**: 외부 CV 가 GroupKFold 면 내부 OOF 분할도 그룹 단위여야 한다 —
    같은 그룹이 내부 train/valid 양쪽에 걸치면(특히 그룹과 상관된 컬럼을 인코딩할 때)

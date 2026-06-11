@@ -163,11 +163,75 @@ def cast_target(y: pd.Series) -> pd.Series:
     return y.astype(int)
 
 
+class MulticlassLabelMap:
+    """multiclass 원라벨 ↔ 0..K-1 매핑 (학습 인코딩·제출 역변환·OOF 열명용).
+
+    `LabelEncoder` 래퍼. `classes_` 는 정렬된 원라벨 배열이고 그 index 가 인코딩 id(0..K-1)다.
+    이 정렬 순서가 lgbm/xgb 의 native 클래스 확률 열 순서와 일치해 OOF 열명이 정렬 일치한다.
+    """
+
+    def __init__(self) -> None:
+        self.classes_: np.ndarray = np.array([])
+
+    def fit(self, y: pd.Series) -> "MulticlassLabelMap":
+        """train 타깃에서 라벨 인코더를 fit 한다."""
+        from sklearn.preprocessing import LabelEncoder
+
+        self._le = LabelEncoder().fit(y)
+        self.classes_ = self._le.classes_
+        return self
+
+    def encode(self, y: pd.Series) -> pd.Series:
+        """원라벨 → 0..K-1 정수 Series (index 보존)."""
+        return pd.Series(self._le.transform(y), index=y.index)
+
+    def decode(self, idx: np.ndarray) -> np.ndarray:
+        """0..K-1 → 원라벨 배열."""
+        return self._le.inverse_transform(np.asarray(idx))
+
+    @property
+    def n_classes(self) -> int:
+        """클래스 수 K."""
+        return len(self.classes_)
+
+
+def resolve_label_map(y: pd.Series) -> MulticlassLabelMap:
+    """train 타깃에서 multiclass 라벨 맵을 fit 한다.
+
+    `config.N_CLASSES` 가 설정돼 있으면 train 라벨 수와 일치하는지 검증한다(불일치=raise).
+
+    Args:
+        y: train 타깃 Series (원라벨).
+
+    Returns:
+        fit 된 MulticlassLabelMap.
+
+    Raises:
+        ValueError: config.N_CLASSES 가 실제 라벨 수와 다를 때.
+    """
+    lm = MulticlassLabelMap().fit(y)
+    if config.N_CLASSES is not None and config.N_CLASSES != lm.n_classes:
+        raise ValueError(
+            f"config.N_CLASSES={config.N_CLASSES} 가 train 라벨 수 {lm.n_classes} 와 불일치 — "
+            "라벨 누락/오설정 확인 (None 이면 자동 추론)."
+        )
+    return lm
+
+
+def _hard_labels(p: Any) -> np.ndarray:
+    """확률→예측 라벨. 2-D(multiclass)=argmax, 1-D(binary)=0.5 임계."""
+    p = np.asarray(p)
+    return p.argmax(axis=1) if p.ndim == 2 else (p > 0.5).astype(int)
+
+
 def get_scorer(name: str | None = None) -> Callable[[Any, Any], float]:
     """config.METRIC(또는 name)에 맞는 (y_true, y_pred)->float scorer 반환.
 
     train_common/stack 의 점수 계산이 `config.METRIC` 하나로 자동 결정된다(하드코딩 제거).
-    지원: auc·logloss·rmse·mae·accuracy. 새 지표는 여기 + `greater_is_better` 에 추가.
+    지원: auc·logloss·rmse·mae·accuracy·balanced_accuracy. 새 지표는 여기 + `greater_is_better` 에 추가.
+
+    accuracy·balanced_accuracy·logloss 는 예측 shape 로 binary(1-D)/multiclass(2-D)를 자동 판별한다
+    (multiclass=argmax·전체 클래스 labels). 새 지표는 여기 + `greater_is_better` 에 추가.
 
     Args:
         name: 지표명. None 이면 `config.METRIC`.
@@ -180,14 +244,20 @@ def get_scorer(name: str | None = None) -> Callable[[Any, Any], float]:
     name = (name or config.METRIC).lower()
     if name == "auc":
         return lambda y, p: float(metrics.roc_auc_score(y, p))
-    if name == "logloss":
-        return lambda y, p: float(metrics.log_loss(y, p))
+    if name == "logloss":  # multiclass(2-D): fold 클래스 누락 대비 전체 K labels 명시
+        return lambda y, p: float(
+            metrics.log_loss(y, p, labels=list(range(np.asarray(p).shape[1])))
+            if np.asarray(p).ndim == 2
+            else metrics.log_loss(y, p)
+        )
     if name == "rmse":
         return lambda y, p: float(metrics.mean_squared_error(y, p) ** 0.5)
     if name == "mae":
         return lambda y, p: float(metrics.mean_absolute_error(y, p))
-    if name == "accuracy":  # ⚠️ 이진분류 전제(임계 0.5). 다중분류는 argmax 로 바꿀 것.
-        return lambda y, p: float(metrics.accuracy_score(y, (np.asarray(p) > 0.5).astype(int)))
+    if name == "accuracy":  # 1-D=0.5 임계, 2-D(multiclass)=argmax (_hard_labels)
+        return lambda y, p: float(metrics.accuracy_score(y, _hard_labels(p)))
+    if name == "balanced_accuracy":  # multiclass 기본 — 클래스별 recall 의 macro 평균
+        return lambda y, p: float(metrics.balanced_accuracy_score(y, _hard_labels(p)))
     raise ValueError(f"미지원 지표 '{name}' — utils.get_scorer 에 추가하라")
 
 
@@ -201,7 +271,7 @@ def greater_is_better(name: str | None = None) -> bool:
 _METRIC_BY_PROBLEM: dict[str, set[str]] = {
     "binary": {"auc", "logloss", "accuracy"},
     "regression": {"rmse", "mae"},
-    "multiclass": {"accuracy", "logloss"},
+    "multiclass": {"accuracy", "logloss", "balanced_accuracy"},
 }
 _CV_BY_PROBLEM: dict[str, set[str]] = {
     "binary": {"StratifiedKFold", "GroupKFold"},
