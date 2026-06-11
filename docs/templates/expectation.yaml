@@ -1,0 +1,32 @@
+# expectation.yaml — 풀 실행 전 사전 등록(pre-registration) 템플릿.
+#
+# 보관 위치: specs/<exp_id>/expectation.yaml  (experiments/ 가 아님!)
+#   이유: experiments/ 내용물은 .gitignore 로 추적 제외되는데, expectation 은
+#   "git HEAD 커밋"이 게이트 조건이므로 반드시 추적 디렉토리(specs/)에 둬야 한다.
+#   guard_bash.sh 가 풀 실행 직전 이 파일의 HEAD 커밋·작업트리 일치를 검사한다.
+#
+# 작성 규칙: 실행 전 작성·커밋. 커밋된 버전이 판정 기준이며 사후 수정 금지.
+#   핵심 3줄(mechanism/predicted/falsification)을 넘기지 말 것.
+#
+# ⚠️ kill_criterion 흡수: 과거 conf 의 kill_criterion(중단 기준) 필드는 여기
+#   falsification 으로 흡수되었다. conf/config.yaml 의 kill_criterion 은
+#   하위호환을 위해 남겨두되 deprecated 다(즉시 제거 금지) — 실제 중단 판정의
+#   단일 진실원은 이 파일의 falsification 1줄이다.
+
+exp_id: exp_000
+baseline_run: ""            # 비교 기준 exp_id (OOF/로그가 풀에 있는 멤버)
+
+mechanism: ""               # 점수를 움직일 메커니즘 1줄.
+                            # 예: "비선형 모델군 추가로 표현 분기 → 앙상블 분산 감소"
+
+predicted:
+  metric_delta: ""          # 주 지표의 정량 범위 1개.
+                            # 예: "+0.001 ~ +0.003 (vs baseline, 주 지표)"
+  secondary: ""             # 선택: 보조 지표 1개 (상관, 분산, 부분군 성능 등)
+
+falsification: ""           # 어떤 숫자가 나오면 어떤 전제가 기각되는가 1줄.
+                            # "기대보다 낮으면" 같은 모호한 표현 금지. 숫자 경계 명시.
+                            # 예: "OOF 상관 >= 0.985 이면 다양성 전제 기각"
+                            # (= 과거 kill_criterion 의 역할을 여기서 수행)
+
+frozen_at: ""               # 커밋 시각 (ISO 8601)

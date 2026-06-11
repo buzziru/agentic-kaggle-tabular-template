@@ -1,0 +1,13 @@
+# frozen.txt — 동결된 스택 풀 멤버 목록 (1줄 1개 exp_id, 주석은 #)
+#
+# ⚠️ 여기 등록되는 것은 "경로"가 아니라 "exp_id"다 (MERGE 충돌해소 ②).
+# 스택 풀에 멤버를 등록할 때 그 exp_id 를 여기에 추가한다.
+# 그러면 guard_frozen.sh / guard_bash.sh 가 해당 멤버의 산출물
+#   experiments/{oof,submissions,logs}/<exp_id>.*
+# 의 수정·덮어쓰기를 차단해 같은-fold 정합을 보호한다.
+#
+# 동결되는 것은 산출물(아티팩트)이지 src/ 공유 코드가 아니다 — 공유 코드 변경은
+# scripts/check_fold_inputs.py 입력 동등성 검증으로 보호한다(MERGE 원칙 1).
+#
+# 예:
+# exp_001_lgbm_base

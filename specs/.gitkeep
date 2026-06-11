@@ -1,0 +1,2 @@
+# specs/<exp_id>/expectation.yaml 사전 등록 디렉토리 (추적 대상).
+# experiments/ 와 달리 .gitignore 제외 대상이 아니다 — expectation 커밋이 게이트 조건이므로.
