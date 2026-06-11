@@ -9,7 +9,7 @@
 
 | # | 항목 | block 기준 |
 |---|------|-----------|
-| 1 | CV 분할 | 분할을 `cv.get_folds` 경유로 얻지 않고 KFold 류를 코드에서 직접 인스턴스화하면 block. (모든 모델은 동일 fold/seed 의 OOF 계약을 공유해야 한다.) |
+| 1 | CV 분할 | 분할을 `cv.get_folds`(레짐별 splits 파일 로드-우선) 경유로 얻지 않고 KFold 류를 코드에서 직접 인스턴스화하면 block. (모든 모델은 동일 fold/seed 의 직렬화된 분할을 공유해야 한다 — `data/splits/{strategy}_{n}fold_seed{seed}.parquet`.) |
 | 2 | 타깃 인지 인코딩 fit 위치 | target encoding·타깃 통계·supervised 스케일링이 fold **외부**(전체 train)에서 fit 되면 block. fold 내부 fit(`OOFTargetEncoder` 경유)만 허용. 타깃 비인지 변환(frequency/count 등)은 전체 fit 허용 |
 | 3 | 증강 격리 | 외부·원본 증강 데이터가 검증 fold·OOF·test 산출에 섞이면 block. **train fold 에만 병합**(`augment` 경로, train-fold-only)인 경우만 pass |
 | 4 | 공유 코드 변경 게이트 | diff 가 `src/train_common.py`·`src/features.py`·`src/cat_prep.py`·`src/encoders.py`·`src/cv.py` 중 하나라도 건드리면, `scripts/check_fold_inputs.py` 의 **before/after JSON diff 일치 증거**가 필수. 불일치 또는 증거 미첨부 = block. (frozen 스택 멤버의 OOF 불변 보호 — 공유 코드는 동결이 아니라 입력 동등성으로 지킨다.) |
