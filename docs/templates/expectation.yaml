@@ -8,6 +8,10 @@
 # 작성 규칙: 실행 전 작성·커밋. 커밋된 버전이 판정 기준이며 사후 수정 금지.
 #   핵심 3줄(mechanism/predicted/falsification)을 넘기지 말 것.
 #
+# 작성 직전 컨텍스트: `uv run python scripts/decision_card.py --exp-id <id> --model <m> [--baseline <id>]`
+#   로 같은 그룹/모델의 노이즈(fold std→SE, 단일시드 탐지 임계 ~2·SE)를 확인하면
+#   metric_delta 임계 설정이 쉬워진다. 읽기 전용·제안만 — 값을 자동으로 채우지 않는다.
+#
 # ⚠️ kill_criterion 흡수: 과거 conf 의 kill_criterion(중단 기준) 필드는 여기
 #   falsification 으로 흡수되었다. conf/config.yaml 의 kill_criterion 은
 #   하위호환을 위해 남겨두되 deprecated 다(즉시 제거 금지) — 실제 중단 판정의
