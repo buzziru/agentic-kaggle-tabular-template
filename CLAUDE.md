@@ -38,7 +38,12 @@
 
 - `eda-explorer` — read-only EDA. 주제별 노트북을 생성하고 **수치 요약만 리턴**한다(토큰 절약).
 - `feature-smith` — `src/features.py` 피처 구현 + 누수 검증 + OOF(Out-of-Fold) 측정. 단일 파일을 건드리므로 **동시 1개만**.
-- {{필요 시 도메인 리서치 / 헤드리스 GPU 러너 등 추가}}
+- `code-reviewer` — 구현 직후·풀 실행 전 [docs/checklists/code_review.md](docs/checklists/code_review.md) 항목별 pass/block 대조. 코드 미수정, 하나라도 block 이면 BLOCK. 작성자와 분리(self-review 방지).
+- `result-reviewer` — 풀 실행 로그를 사전등록 expectation 과 대조해 4종 판정(confirmed/refuted/inconclusive/invalid). 측정 검정력 규칙 내장(|Δ|<~2·SE 는 단일시드 판정 금지). 기록=`docs/wiki/experiments/judgments/`. **다음 실험 제안 금지**.
+- `premise-auditor` — 판정 5건마다 blind 전제 감사(숫자만 입력, rationale 미열람). 공격 가설 3개+최저비용 반증. 기록=`docs/wiki/audits/`. kill/continue 판정은 사용자 몫(천장 게이트 기계화).
+- `exp-runner` — 헤드리스 원격 실행(기본 Kaggle GPU, Lightning/Colab 디스패치). 풀 실행 전 expectation 커밋 + code-reviewer PASS 확인. {{필요 시 도메인 리서치 등 추가}}
+
+⚠️ 풀 실험 1사이클: 설계+expectation 커밋 → (구현) → **code-reviewer** PASS → **exp-runner** 실행 → **result-reviewer** 판정 → 5건마다 **premise-auditor**. 판정·감사 후 방향은 사용자가 정한다.
 
 주요 결정은 **[docs/wiki/decisions.md](docs/wiki/decisions.md)(ADR-lite)** 에 기록한다 — 새 결정마다 "왜 그렇게 정했는지"를 남긴다.
 
@@ -50,6 +55,7 @@
 - **트랙의 2번째 이후 실험 전**: 어시스턴트는 **"이 레버의 천장이 격차를 덮는가?"를 challenge** 하고 kill/continue 의견을 낸다(patience: N연속 < ε 이면 종료 권고, 타임박스 병기).
 - ⚠️ **공개/SOTA 단일 점수보다 크게 뒤처진 멤버는 무조건 우선순위 최상위다.** "강화는 전이 0" 같은 **일괄 보류(park)**는 *천장 근처의 한계 튜닝*에만 적용한다(약체 멤버 방치 교훈).
 - ⚠️ **결정 주체는 사용자다.** 어시스턴트는 규칙대로 결과를 보고하고 기각/park **의견만** 낸다. **임의 기각·중단·강등·발사는 금지** — 의견을 낸 뒤 사용자 결정을 기다린다.
+- **케이던스**: 이 게이트의 기계화가 `premise-auditor`(blind 전제 감사)다 — `docs/wiki/experiments/judgments/` 판정 **5건마다** main 이 트리거하고, kill/continue 는 사용자가 감사 리포트를 읽고 정한다.
 
 ## 프로세스 규율 (필수) — 운영 부채 방지
 
@@ -60,6 +66,7 @@
 - **실험 ID 컨벤션**: 프로젝트 시작 시 규칙 하나를 고정하고(`exp_<NNN>_<short-slug>` 연번 권장) **끝까지 일관**되게 쓴다(중간 변경 금지).
 - **회고 의무**: 레버/트랙을 종료할 때 해당 실험군 회고를 `docs/wiki/experiments/exp_*.md` 에 작성해야 트랙을 close 한다(가설→결과→결론, 수치+근거). 누락 금지.
 - **외부 인프라 가드**: 반복되는 환경 오류(Kaggle/Colab/GPU 등)는 **1회 발생 시 즉시 재사용 가드로 코드화**한다(코드 생성기·모니터·fast-fail). 가드 없이 N회 반복은 금지다.
+- **expectation 게이트**: 풀 실행은 `specs/<exp_id>/expectation.yaml`(mechanism/predicted/falsification) 을 **실행 전 커밋**해야 한다. `guard_bash.sh` 훅이 커밋·작업트리 일치를 검사한다. ⚠️ **스크리닝(`max_folds=`)은 면제** — 사전등록은 풀 실행에만 적용. 템플릿은 [docs/templates/expectation.yaml](docs/templates/expectation.yaml).
 
 ## 프로젝트 구조
 

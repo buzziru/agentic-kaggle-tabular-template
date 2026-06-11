@@ -62,10 +62,14 @@ conf/              # Hydra 설정 — 튜닝/실험 노브 (config.yaml, model/,
 src/               # config·data·features·encoders·cv·train_common·train_lgbm·train_xgb·stack·predict·utils
 scripts/           # 게이트·집계 (check_fold_inputs, summarize, hooks/)
 docs/              # data_dictionary · eda · feature_engineering · setup_questions
-docs/wiki/         # 결정 기록(ADR-lite) · 실험 회고 · 인프라 런북(Kaggle/Colab/Lightning)
+docs/wiki/         # 결정 기록(ADR-lite) · 실험 회고 · judgments · audits · 인프라 런북(Kaggle/Colab/Lightning)
+docs/checklists/   # 고정 코드리뷰 체크리스트 (code-reviewer 가 항목별 대조)
+docs/templates/    # expectation.yaml 등 사전등록 템플릿
 docs/PROJECT_README.template.md  # 새 프로젝트가 복사해 채우는 README 템플릿
-.claude/agents/    # 커스텀 서브에이전트 (eda-explorer · feature-smith · kaggle-runner)
+.claude/agents/    # 커스텀 서브에이전트 (eda-explorer · feature-smith · code-reviewer · result-reviewer · premise-auditor · exp-runner)
 kaggle/            # 헤드리스 GPU 실행 자산 (gen_kernel·monitor·push)
+specs/<exp_id>/    # 사전등록 expectation.yaml + review_report.md (추적 대상)
+frozen.txt         # 동결된 스택 풀 멤버 exp_id 목록 (산출물 수정 차단)
 experiments/       # logs(JSON) · oof · submissions  (내용물 git 제외)
 ```
 

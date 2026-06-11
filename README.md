@@ -66,10 +66,14 @@ conf/              # Hydra config — tuning/experiment knobs (config.yaml, mode
 src/               # config·data·features·encoders·cv·train_common·train_lgbm·train_xgb·stack·predict·utils
 scripts/           # gates·aggregation (check_fold_inputs, summarize, hooks/)
 docs/              # data_dictionary · eda · feature_engineering · setup_questions
-docs/wiki/         # decision log (ADR-lite) · experiment retrospectives · infra runbooks (Kaggle/Colab/Lightning)
+docs/wiki/         # decision log (ADR-lite) · experiment retrospectives · judgments · audits · infra runbooks (Kaggle/Colab/Lightning)
+docs/checklists/   # fixed code-review checklist (code-reviewer cross-checks each item)
+docs/templates/    # pre-registration templates (expectation.yaml, ...)
 docs/PROJECT_README.template.md  # the README each new project copies and fills in
-.claude/agents/    # custom subagents (eda-explorer · feature-smith · kaggle-runner)
+.claude/agents/    # custom subagents (eda-explorer · feature-smith · code-reviewer · result-reviewer · premise-auditor · exp-runner)
 kaggle/            # headless GPU run assets (gen_kernel·monitor·push)
+specs/<exp_id>/    # pre-registered expectation.yaml + review_report.md (tracked)
+frozen.txt         # frozen stack-pool member exp_id list (blocks artifact edits)
 experiments/       # logs(JSON) · oof · submissions  (contents git-ignored)
 ```
 
