@@ -18,11 +18,13 @@ import sys
 THRESHOLD = 8  # 미커밋 tracked 변경이 이 수 이상이면 리마인드
 EXPECTED_GUARDS = ["guard_bash.py", "guard_frozen.py", "lint_notebook.py"]  # 등록·존재 확인 대상
 
-for _stream in (sys.stdout, sys.stderr):  # Windows 콘솔 cp949 한글 깨짐/에러 방지
-    try:
-        _stream.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:  # Windows 콘솔 cp949 한글 깨짐/에러 방지 — 공유 헬퍼로 통일
+    import _guardlib as gl
+
+    gl.reconfigure_utf8()
+except Exception:
+    pass
 
 
 def check_uncommitted() -> None:

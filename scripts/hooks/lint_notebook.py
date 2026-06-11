@@ -19,8 +19,15 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import tokenize
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    import _guardlib as gl  # 인코딩 reconfigure 단일 진실원
+except Exception:
+    gl = None
 
 
 def find_separator_semicolons(source: str) -> list[int]:
@@ -56,11 +63,8 @@ def find_separator_semicolons(source: str) -> list[int]:
 
 
 def main() -> int:
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8")
-        except Exception:
-            pass
+    if gl is not None:
+        gl.reconfigure_utf8()
     try:
         data = json.load(sys.stdin)
     except Exception:
