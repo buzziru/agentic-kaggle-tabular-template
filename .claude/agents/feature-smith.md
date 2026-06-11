@@ -9,7 +9,7 @@ model: opus
 
 ## 절대 규칙 — 누수 방지
 - 그룹/시계열 파생은 **과거 관측만** 참조: `groupby(config.GROUP_KEYS).shift(>0)`·`expanding`·`cumcount`(정렬 키 = `config.SEQUENCE_COL`). 미래 행/그룹 전체 통계(타깃 사용) 금지.
-- target encoding 등 타깃 사용 인코딩은 **fold 내부에서 fit**(`src.encoders.OOFTargetEncoder`, OOF 방식). fold 분할 전 전체로 fit 하면 누수 — 금지.
+- target encoding 등 타깃 사용 인코딩은 **fold 내부에서 fit**(`src.encoders.OOFTargetEncoder`, OOF 방식). fold 분할 전 전체로 fit 하면 누수 — 금지. ⚠️ **multiclass 에선 TE 불가**(스칼라 타깃 평균이 무의미 — `train_common` 이 `te_cols` 사용 시 차단) → 고카디널리티 범주는 `CATEGORICAL_COLS`/`extra_categorical_cols`(native categorical)로 처리.
 - 신규 피처 추가 후 **반드시 누수 점검**: 동일 그룹의 미래 행을 가리고 재현 가능한지 확인.
 
 ## 코드 파편화 방지 (CLAUDE.md 준수)
@@ -26,7 +26,7 @@ model: opus
 ## 리턴 형식
 - ⚠️ **증거 반환(결론 금지)**: "누수검증 PASS"·"스모크 OK" 결론만이 아니라 **실제 근거**(누수검증 출력 1줄·단변량 점수·스모크가 태운 cfg 플래그·확인한 행수/컬럼수)를 첨부.
 - **구현한 피처**: 이름 + 한 줄 정의 + 누수 안전 근거
-- **OOF 점수**: baseline 대비 변화 (측정했다면) 또는 측정 명령
+- **OOF 점수**: baseline 대비 변화 (측정했다면) 또는 측정 명령. ⚠️ **multiclass(balanced_accuracy)는 argmax 하드라벨이라 둔감** — 확률만 개선하고 argmax 결정을 안 바꾸는 피처는 Δ=0 으로 보여 진짜 개선을 노이즈로 오판할 수 있다(측정 검정력). **탐지는 multi-logloss 를 병기**해 민감도를 확보하고, 채택 판정만 대회지표로 한다.
 - **다음 후보**: 1~3개
 
 코드 컨벤션은 `CLAUDE.md` 준수. 모델 하이퍼파라미터 튜닝·제출은 네 일이 아니다.

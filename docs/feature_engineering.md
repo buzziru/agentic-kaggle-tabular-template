@@ -4,7 +4,7 @@
 
 ## 누수 안전 원칙
 - 그룹/시계열 파생 = **과거 관측만**(`shift(>0)`·expanding·cumcount, 정렬 키 = `config.SEQUENCE_COL`).
-- 타깃 사용 인코딩 = **fold-내 OOF**(`src.encoders.OOFTargetEncoder`).
+- 타깃 사용 인코딩 = **fold-내 OOF**(`src.encoders.OOFTargetEncoder`). ⚠️ multiclass 미지원(스칼라 평균 무의미) → native categorical(`CATEGORICAL_COLS`)로 처리.
 - 신규 피처는 미래 행 마스킹 불변성으로 누수 점검 후 채택.
 
 ## 레시피: 그룹/시계열 과거-only 집계 (선택)
