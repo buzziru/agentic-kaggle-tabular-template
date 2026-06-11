@@ -66,7 +66,8 @@
 - **실험 ID 컨벤션**: 프로젝트 시작 시 규칙 하나를 고정하고(`exp_<NNN>_<short-slug>` 연번 권장) **끝까지 일관**되게 쓴다(중간 변경 금지).
 - **회고 의무**: 레버/트랙을 종료할 때 해당 실험군 회고를 `docs/wiki/experiments/exp_*.md` 에 작성해야 트랙을 close 한다(가설→결과→결론, 수치+근거). 누락 금지.
 - **외부 인프라 가드**: 반복되는 환경 오류(Kaggle/Colab/GPU 등)는 **1회 발생 시 즉시 재사용 가드로 코드화**한다(코드 생성기·모니터·fast-fail). 가드 없이 N회 반복은 금지다.
-- **expectation 게이트**: 풀 실행은 `specs/<exp_id>/expectation.yaml`(mechanism/predicted/falsification) 을 **실행 전 커밋**해야 한다. `guard_bash.sh` 훅이 커밋·작업트리 일치를 검사한다. ⚠️ **스크리닝(`max_folds=`)은 면제** — 사전등록은 풀 실행에만 적용. 템플릿은 [docs/templates/expectation.yaml](docs/templates/expectation.yaml).
+- **expectation 게이트**: 풀 실행은 `specs/<exp_id>/expectation.yaml`(mechanism/predicted/falsification) 을 **실행 전 커밋**해야 한다. `guard_bash.py` 훅이 커밋·작업트리 일치를 검사한다. ⚠️ **스크리닝(`max_folds=`)은 면제** — 사전등록은 풀 실행에만 적용. 템플릿은 [docs/templates/expectation.yaml](docs/templates/expectation.yaml).
+- **가드 티어**: 훅 가드는 T0(하드·우회불가)/T1(기록 우회)/T2(경고) 3티어다. T1은 `specs/<exp_id>/override_<guard>.md` 를 커밋하면 통과+로깅(`docs/wiki/guard_overrides.jsonl`) — 훅을 통째로 끄는 것보다 좁고 추적된다. 오차단은 훅을 끄지 말고 `conf/guard/*.txt` 패턴 한 줄로 고친다. 상세 = [docs/wiki/guard_tiers.md](docs/wiki/guard_tiers.md).
 
 ## 프로젝트 구조
 

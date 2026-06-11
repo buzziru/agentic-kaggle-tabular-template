@@ -1,0 +1,9 @@
+# 풀 실행으로 간주할 명령 정규식 (1줄 1패턴, # 주석). guard_bash.py 가 매칭하면
+# expectation 게이트(T1)를 적용한다. max_folds= 스크리닝·src.stack 은 코드에서 면제.
+#
+# ⚠️ 새 실행 환경(잡 디스패처 등)을 추가하면 여기 한 줄 추가하면 된다(코드 수정 불필요).
+# ⚠️ 이 파일은 frozen/gitignore 대상이 아니다 — 그러면 갱신이 막혀 순환에 빠진다.
+
+python[0-9]?\s+-m\s+src\.train
+kaggle\s+kernels\s+push
+lightning\s+run\s+job

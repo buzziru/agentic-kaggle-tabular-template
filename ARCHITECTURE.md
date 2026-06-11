@@ -11,7 +11,7 @@ flowchart TD
 
     CONF --> TRAIN["src.train<br/>single entrypoint (hydra.main)"]
     SPEC["specs/&lt;exp&gt;/expectation.yaml<br/>(pre-registration)"]
-    GATE["guard_bash.sh<br/>expectation gate<br/>full run ⇒ HEAD-committed expectation<br/>(max_folds screening exempt)"]
+    GATE["guard_bash.py<br/>expectation gate<br/>full run ⇒ HEAD-committed expectation<br/>(max_folds screening exempt)"]
     SPEC -. referenced .-> GATE
     GATE -. blocks full run w/o committed expectation .-> TRAIN
     TRAIN --> REG["registry<br/>model.name → Trainer class"]
@@ -59,7 +59,7 @@ flowchart TD
         SUBF["experiments/submissions/&lt;exp&gt;.csv"]
         LOGF["experiments/logs/&lt;exp&gt;.json"]
     end
-    FROZEN["guard_frozen.sh + frozen.txt<br/>frozen 멤버 산출물 수정 차단"]
+    FROZEN["guard_frozen.py + frozen.txt<br/>frozen 멤버 산출물 수정 차단"]
     FROZEN -. protects (frozen exp_id artifacts) .-> CONTRACT
     SPEC -. expectation_path (ref only) .-> LOGF
 

@@ -3,7 +3,7 @@
 # 보관 위치: specs/<exp_id>/expectation.yaml  (experiments/ 가 아님!)
 #   이유: experiments/ 내용물은 .gitignore 로 추적 제외되는데, expectation 은
 #   "git HEAD 커밋"이 게이트 조건이므로 반드시 추적 디렉토리(specs/)에 둬야 한다.
-#   guard_bash.sh 가 풀 실행 직전 이 파일의 HEAD 커밋·작업트리 일치를 검사한다.
+#   guard_bash.py 가 풀 실행 직전 이 파일의 HEAD 커밋·작업트리 일치를 검사한다.
 #
 # 작성 규칙: 실행 전 작성·커밋. 커밋된 버전이 판정 기준이며 사후 수정 금지.
 #   핵심 3줄(mechanism/predicted/falsification)을 넘기지 말 것.

@@ -14,7 +14,7 @@ model: sonnet
 - **Colab** — `docs/wiki/colab_jobs.md` 런북.
 
 ## 실행 전제 (풀 실행 전 자체 확인 — 발사 전 가드)
-풀 실행(`max_folds` 미지정)은 두 게이트를 통과해야 한다. 훅(`guard_bash.sh`)이 (1)을 차단하지만, 발사 전에 직접 확인한다:
+풀 실행(`max_folds` 미지정)은 두 게이트를 통과해야 한다. 훅(`guard_bash.py`)이 (1)을 차단하지만, 발사 전에 직접 확인한다:
 1. **expectation 커밋**: `specs/<exp_id>/expectation.yaml` 이 존재하고 git HEAD 에 커밋되어 있으며 작업트리와 일치(`git cat-file -e HEAD:...` / `git diff --quiet HEAD -- ...`). 미충족이면 발사 금지 — main 에 반송.
 2. **code-reviewer PASS**: `specs/<exp_id>/review_report.md` 의 판정이 PASS. BLOCK 이면 발사 금지.
 스크리닝(`max_folds=` 지정)은 면제 — 그대로 실행한다.
