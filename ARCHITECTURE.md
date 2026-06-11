@@ -10,6 +10,10 @@ flowchart TD
     CFG["src/config.py<br/>SEED · COLS · METRIC<br/>PROBLEM_TYPE · CV_STRATEGY"]
 
     CONF --> TRAIN["src.train<br/>single entrypoint (hydra.main)"]
+    SPEC["specs/&lt;exp&gt;/expectation.yaml<br/>(pre-registration)"]
+    GATE["guard_bash.sh<br/>expectation gate<br/>full run ⇒ HEAD-committed expectation<br/>(max_folds screening exempt)"]
+    SPEC -. referenced .-> GATE
+    GATE -. blocks full run w/o committed expectation .-> TRAIN
     TRAIN --> REG["registry<br/>model.name → Trainer class"]
     REG --> TC
     CFG -. global constants .-> TC
@@ -20,7 +24,7 @@ flowchart TD
         G["multiclass guard<br/>(binary / regression = 1급)"]
         LD["data.load_train / load_test"]
         FE["features.build_features<br/>(+ feature_builder hook)"]
-        FD["cv.get_folds<br/>Stratified / KFold / Group<br/>(+ make_groups)"]
+        FD["cv.get_folds<br/>Stratified / KFold / Group<br/>(+ make_groups · load-first splits/*.parquet)"]
         subgraph LOOP["per-fold loop"]
             direction TB
             TE["OOFTargetEncoder<br/>fold-safe · group-aware"]
@@ -55,6 +59,9 @@ flowchart TD
         SUBF["experiments/submissions/&lt;exp&gt;.csv"]
         LOGF["experiments/logs/&lt;exp&gt;.json"]
     end
+    FROZEN["guard_frozen.sh + frozen.txt<br/>frozen 멤버 산출물 수정 차단"]
+    FROZEN -. protects (frozen exp_id artifacts) .-> CONTRACT
+    SPEC -. expectation_path (ref only) .-> LOGF
 
     CONTRACT --> STACK
     subgraph STACK["src.stack — meta learner"]
