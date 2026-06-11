@@ -94,6 +94,7 @@ def log_experiment(
     notes: str = "",
     kill_criterion: str = "",
     cv_strategy: str | None = None,
+    expectation_path: str | None = None,
     log_dir: Path | None = None,
 ) -> Path:
     """실험 결과를 구조화 JSON 으로 저장한다 (1 실험 = 1 파일).
@@ -111,6 +112,8 @@ def log_experiment(
         kill_criterion: 스파이크 전 사전 중단조건(과몰입 구조적 가드).
         cv_strategy: 실제 사용한 CV 라벨(예: "StratifiedKFold_7"). None 이면 config 기본값.
             ⚠️ n_folds 오버라이드·부분 실행을 정직하게 남기려면 호출부가 실제 값을 넘긴다.
+        expectation_path: 사전 등록된 specs/<exp_id>/expectation.yaml 의 경로 참조(내용 복사 아님).
+            풀 실행이고 파일이 있을 때만 호출부가 넘긴다 — 게이트(차단)는 훅의 책임이고 여기선 기록만.
         log_dir: 로그 저장 디렉터리. None 이면 호출 시점의 `config.LOG_DIR` 사용
             (기본인자 동결 방지 — Kaggle 등에서 런타임 오버라이드가 반영되게).
 
@@ -136,6 +139,7 @@ def log_experiment(
         "params": params,
         "notes": notes,
         "kill_criterion": kill_criterion,
+        "expectation_path": expectation_path,
     }
     path = log_dir / f"{exp_id}.json"
     path.write_text(json.dumps(record, indent=2, ensure_ascii=False))

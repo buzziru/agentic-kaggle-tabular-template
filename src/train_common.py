@@ -218,6 +218,14 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
     }
     # 실제 사용한 fold 수·부분 실행을 정직하게 라벨링 (config.N_FOLDS 하드코딩 불일치 방지).
     cv_label = f"{config.CV_STRATEGY}_{n_folds}" + (f"_partial{len(folds)}" if partial else "")
+    # expectation 사전등록 경로 참조 (게이트=훅 책임, 여기선 기록만 — 차단·이중게이트 금지).
+    # 풀 실행이고 specs/<exp_id>/expectation.yaml 이 있을 때만 경로를 남긴다(내용 복사 아님).
+    # 부재해도 학습은 막지 않는다(Kaggle/Lightning 원격엔 specs/ 가 없을 수 있음).
+    expectation_path = None
+    if not partial:
+        _exp_file = config.ROOT_DIR / "specs" / exp_id / "expectation.yaml"
+        if _exp_file.is_file():
+            expectation_path = _exp_file.relative_to(config.ROOT_DIR).as_posix()
     default_note = (
         f"partial screening {len(folds)}/{n_folds}; {te_note}"
         if partial
@@ -233,6 +241,7 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
         notes=notes or default_note,
         kill_criterion=cfg.get("kill_criterion", ""),
         cv_strategy=cv_label,
+        expectation_path=expectation_path,
     )
     print(f"로그 저장: {log_path}")
 

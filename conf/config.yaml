@@ -10,7 +10,8 @@ notes: ""
 use_wandb: true
 n_folds: 5         # split 다양성: 7/10-fold OOF 는 5-fold 와 직교(d_eff 축). 기본=src.config.N_FOLDS
 max_folds: null    # null=전체. N(>=1)이면 동일 분할의 앞 N fold 만 실행(스크리닝용)
-kill_criterion: "" # 스파이크 전 사전 중단조건 선언(과몰입 구조적 가드). JSON 로그에 기록
+kill_criterion: "" # [deprecated] → specs/<exp_id>/expectation.yaml 의 falsification 으로 이동.
+                   #   하위호환 위해 유지(즉시 제거 금지). 중단조건 단일 진실원은 expectation.yaml. JSON 로그엔 계속 기록.
 seed: 42           # 모델/run seed (seed averaging 노브). ⚠️ fold 분할 seed 는 src.config.SEED 영구 고정 — 이 노브는 모델 random_state·seed_everything 만. 바꿔도 fold 불변.
 
 # (선택) 외부 원본 데이터 train 증강 (검증/test 미포함).
