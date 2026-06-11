@@ -221,6 +221,13 @@ def run_oof_cv(cfg: DictConfig, trainer: "ModelTrainer") -> dict[str, Any]:
             )
             oof_df.insert(0, config.ID_COL, train_df[config.ID_COL].to_numpy())
             oof_df.to_csv(config.OOF_DIR / f"{exp_id}.csv", index=False)
+            # 스택용 test 확률 행렬(제출은 argmax 라벨이라 멤버 test 확률이 사라짐 → 별도 저장).
+            config.TEST_PRED_DIR.mkdir(parents=True, exist_ok=True)
+            tp_df = pd.DataFrame(
+                {str(lbl): test_pred[:, i] for i, lbl in enumerate(label_map.classes_)}
+            )
+            tp_df.insert(0, config.ID_COL, sub[config.ID_COL].to_numpy())
+            tp_df.to_csv(config.TEST_PRED_DIR / f"{exp_id}.csv", index=False)
             sub[config.TARGET_COL] = label_map.decode(test_pred.argmax(axis=1))
         else:
             pd.DataFrame({config.ID_COL: train_df[config.ID_COL], "oof": oof}).to_csv(

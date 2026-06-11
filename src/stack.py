@@ -3,14 +3,16 @@
 ⚠️ 이 모듈은 **OOF 계약만** 소비한다 — 모델 코드/내부에 의존하지 않는다:
   experiments/oof/<member>.csv        = [id, oof]   (동일 seed=42 fold 의 leak-free OOF)
   experiments/submissions/<member>.csv = [id, <target>]
+  (multiclass: oof=[id, oof_<label>...] K열 · test_pred/<member>.csv=[id, <label>...] K열 ·
+   submission=[id, <target>] argmax 라벨 — 멤버 test 확률은 test_pred 에서 읽는다)
 어떤 모델을 추가하든 train_common 이 이 형식을 보장하므로, 스택 풀은 멤버 수가 늘어도
 모델별 특수 코드가 0 이다 (= "모델 추가로 스택이 특정 코드에 묶이는" 문제 차단).
 
 base OOF 를 메타 피처로, **같은 fold 로 메타를 CV 학습**해 meta-OOF 산출(누수 없음).
-메타러너는 `config.PROBLEM_TYPE` 으로 갈린다(src 와 동일 방향 — binary/regression 1급):
+메타러너는 `config.PROBLEM_TYPE` 으로 갈린다(src 와 동일 방향):
   - binary:     equal / rank_mean / logistic / nnls(logloss 최소 블렌드)
   - regression: equal / linear / nnls(MSE 최소 블렌드)   ← rank_mean·logistic 은 binary 전용
-⚠️ multiclass 는 1-D OOF 계약(단일 oof 열) 밖이라 막는다(확장점 — OOF 계약 확장 필요).
+  - multiclass: equal / multinomial / nnls(멤버 단위 convex, multiclass logloss 최소)
 ⚠️ GBDT 메타 금지(피처 소수 과적합). 스택 멤버 추가 판정은 in-sample meta-OOF 가 아니라
    held-out/nested 로(스태커는 단일모델과 별개 레짐 — CLAUDE.md 검증 전략).
 
@@ -78,11 +80,31 @@ def _resolve_regime(members: list[str]) -> tuple[str, int]:
     return strategy, int(nf)
 
 
-def _load(members: list[str], train: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """base OOF·test 행렬과 타깃을 정렬해 로드한다 (id 정합 = 계약 강제)."""
-    y = utils.cast_target(train[config.TARGET_COL]).to_numpy()  # binary=int·regression=float
-    sub_ids = data.load_sample_submission()[config.ID_COL]
+def _load(members, train):
+    """base OOF·test 행렬과 타깃을 정렬해 로드한다 (id 정합 = 계약 강제).
 
+    Returns: (X, X_test, y, label_map)
+      - binary/regression: X=(n,M), X_test=(n_test,M), label_map=None
+      - multiclass: X=(n, M*K), X_test=(n_test, M*K) (멤버별 K열 블록 concat, classes_ 순서),
+        y=0..K-1 인코딩, label_map=fit된 맵 (제출 argmax 역변환용).
+    """
+    sub_ids = data.load_sample_submission()[config.ID_COL]
+    if config.PROBLEM_TYPE == "multiclass":
+        label_map = utils.resolve_label_map(train[config.TARGET_COL])
+        y = label_map.encode(train[config.TARGET_COL]).to_numpy()
+        classes = label_map.classes_
+        oof_blocks, test_blocks = [], []
+        for m in members:
+            o = utils.read_pred(config.OOF_DIR, m)
+            assert o[config.ID_COL].equals(train[config.ID_COL]), f"{m} OOF id 불일치"
+            oof_blocks.append(o[[f"oof_{lbl}" for lbl in classes]].to_numpy())
+            t = utils.read_pred(config.TEST_PRED_DIR, m)
+            assert t[config.ID_COL].equals(sub_ids), f"{m} test_pred id 불일치"
+            test_blocks.append(t[[str(lbl) for lbl in classes]].to_numpy())
+        # (n, M*K): 멤버 순서대로 K열 블록 concat. _fit_predict_mc 가 (n,M,K)로 reshape.
+        return np.hstack(oof_blocks), np.hstack(test_blocks), y, label_map
+
+    y = utils.cast_target(train[config.TARGET_COL]).to_numpy()  # binary=int·regression=float
     oof_cols, test_cols = [], []
     for m in members:
         o = utils.read_pred(config.OOF_DIR, m)
@@ -91,7 +113,7 @@ def _load(members: list[str], train: pd.DataFrame) -> tuple[np.ndarray, np.ndarr
         s = utils.read_pred(config.SUBMISSION_DIR, m)
         assert s[config.ID_COL].equals(sub_ids), f"{m} submission id 불일치"
         test_cols.append(s[config.TARGET_COL].to_numpy())
-    return np.column_stack(oof_cols), np.column_stack(test_cols), y
+    return np.column_stack(oof_cols), np.column_stack(test_cols), y, None
 
 
 def _nnls_weights(X: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -132,12 +154,60 @@ def _fit_predict(name: str, Xtr, ytr, Xva) -> np.ndarray:
     raise ValueError(name)
 
 
-def _cv_meta(name: str, X: np.ndarray, y: np.ndarray, X_test: np.ndarray, folds: list, scorer) -> dict:
-    """동일 fold 로 meta-OOF 산출 + 전체 재적합 test 예측."""
-    oof = np.zeros(len(y))
-    for tr, va in folds:
-        oof[va] = _fit_predict(name, X[tr], y[tr], X[va])
-    test = _fit_predict(name, X, y, X_test)  # 전체 재적합
+def _mc_convex_weights(X: np.ndarray, y: np.ndarray, n_classes: int) -> np.ndarray:
+    """멤버 단위 비음수·합=1 가중 (multiclass logloss 최소). blend = Σ w_m·block_m.
+
+    binary/regression 의 `_nnls_weights` 의 multiclass 대응 — 멤버마다 가중 하나를
+    K-확률 블록 전체에 곱한다(피처 M·K 가 아니라 멤버 M 차원이라 과적합에 강함).
+    """
+    K = n_classes
+    M = X.shape[1] // K
+    blocks = X.reshape(len(X), M, K)
+
+    def loss(w: np.ndarray) -> float:
+        b = (blocks * w[None, :, None]).sum(axis=1)
+        b = b / b.sum(axis=1, keepdims=True)
+        return float(log_loss(y, np.clip(b, 1e-7, 1.0), labels=list(range(K))))
+
+    res = minimize(
+        loss, np.full(M, 1 / M), method="SLSQP",
+        bounds=[(0.0, 1.0)] * M, constraints={"type": "eq", "fun": lambda w: w.sum() - 1},
+    )
+    return res.x
+
+
+def _fit_predict_mc(name: str, Xtr, ytr, Xva, n_classes: int) -> np.ndarray:
+    """multiclass 메타 — (n, M*K) 입력에서 (n_va, K) 확률 반환."""
+    K = n_classes
+    M = Xva.shape[1] // K
+    if name == "equal":  # 멤버 K-확률 행렬 평균 후 재정규화
+        avg = Xva.reshape(len(Xva), M, K).mean(axis=1)
+        return avg / avg.sum(axis=1, keepdims=True)
+    if name == "multinomial":  # (n, M*K) 피처에 multinomial 로지스틱
+        m = LogisticRegression(C=1.0, max_iter=2000)
+        m.fit(Xtr, ytr)
+        proba = np.zeros((len(Xva), K))
+        proba[:, m.classes_] = m.predict_proba(Xva)  # fold 누락 클래스 대비 전체 K열 재배치
+        return proba
+    if name == "nnls":  # 멤버 단위 convex 블렌드
+        w = _mc_convex_weights(Xtr, ytr, K)
+        blend = (Xva.reshape(len(Xva), M, K) * w[None, :, None]).sum(axis=1)
+        return blend / blend.sum(axis=1, keepdims=True)
+    raise ValueError(name)
+
+
+def _cv_meta(name, X, y, X_test, folds, scorer, n_classes=None) -> dict:
+    """동일 fold 로 meta-OOF 산출 + 전체 재적합 test 예측 (multiclass=2-D oof)."""
+    if n_classes is not None:
+        oof = np.zeros((len(y), n_classes))
+        for tr, va in folds:
+            oof[va] = _fit_predict_mc(name, X[tr], y[tr], X[va], n_classes)
+        test = _fit_predict_mc(name, X, y, X_test, n_classes)
+    else:
+        oof = np.zeros(len(y))
+        for tr, va in folds:
+            oof[va] = _fit_predict(name, X[tr], y[tr], X[va])
+        test = _fit_predict(name, X, y, X_test)  # 전체 재적합
     return {"name": name, "oof_score": scorer(y, oof), "oof": oof, "test": test}
 
 
@@ -148,15 +218,11 @@ def main() -> None:
     args = ap.parse_args()
     members = [m.strip() for m in args.members.split(",")]
 
-    if config.PROBLEM_TYPE == "multiclass":
-        raise NotImplementedError(
-            "stack 은 1-D OOF 계약(단일 oof 열)만 소비한다 — multiclass 는 멤버 OOF 가 k열이라 "
-            "_load/메타러너/출력 계약을 확장해야 한다(확장점). 템플릿은 binary/regression 1급."
-        )
     utils.validate_problem_config()  # problem_type↔metric↔cv_strategy 명백한 불일치 차단
 
     train = data.load_train()
-    X, X_test, y = _load(members, train)
+    X, X_test, y, label_map = _load(members, train)
+    n_classes = label_map.n_classes if label_map is not None else None  # multiclass=K, else None
     # ⚠️ base 학습과 **동일 검증 레짐**으로 meta-OOF 산출 — 멤버 로그에서 실제 strategy·n_folds
     #    를 읽어(override 반영) groups 와 함께 전달. seed 는 config.SEED 로 base 와 공통.
     strategy, n_folds = _resolve_regime(members)
@@ -167,36 +233,53 @@ def main() -> None:
     print(f"=== members: {members} ({config.METRIC}) ===")
     print("개별 OOF:")
     for j, m in enumerate(members):
-        print(f"  {m}: {scorer(y, X[:, j]):.6f}")
-    print("Pearson corr:")
-    print(pd.DataFrame(np.corrcoef(X.T), index=members, columns=members).round(4).to_string())
+        col = X[:, j] if n_classes is None else X[:, j * n_classes:(j + 1) * n_classes]
+        print(f"  {m}: {scorer(y, col):.6f}")
+    if n_classes is None:
+        print("Pearson corr:")
+        print(pd.DataFrame(np.corrcoef(X.T), index=members, columns=members).round(4).to_string())
+    else:
+        print("(multiclass: 멤버별 K-확률 블록이라 Pearson corr 생략)")
 
-    metas = (
-        ["equal", "linear", "nnls"]
-        if config.PROBLEM_TYPE == "regression"
-        else ["equal", "rank_mean", "logistic", "nnls"]
-    )
-    results = [_cv_meta(n, X, y, X_test, folds, scorer) for n in metas]
+    if config.PROBLEM_TYPE == "multiclass":
+        metas = ["equal", "multinomial", "nnls"]
+    elif config.PROBLEM_TYPE == "regression":
+        metas = ["equal", "linear", "nnls"]
+    else:
+        metas = ["equal", "rank_mean", "logistic", "nnls"]
+    results = [_cv_meta(n, X, y, X_test, folds, scorer, n_classes) for n in metas]
     print("\n=== meta-OOF ===")
     for r in sorted(results, key=lambda d: d["oof_score"], reverse=greater):
         print(f"  {r['name']:>10}: {r['oof_score']:.6f}")
 
-    w_nnls = _nnls_weights(X, y)
+    w_nnls = _mc_convex_weights(X, y, n_classes) if n_classes else _nnls_weights(X, y)
     print("\nnnls 가중:", {m: round(float(w), 4) for m, w in zip(members, w_nnls)})
 
     best = (max if greater else min)(results, key=lambda d: d["oof_score"])
     config.OOF_DIR.mkdir(parents=True, exist_ok=True)
     config.SUBMISSION_DIR.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame({config.ID_COL: train[config.ID_COL], "oof": best["oof"]}).to_csv(
-        config.OOF_DIR / f"{args.tag}_{best['name']}.csv", index=False)
     sub = data.load_sample_submission()
-    sub[config.TARGET_COL] = best["test"]
-    sub.to_csv(config.SUBMISSION_DIR / f"{args.tag}_{best['name']}.csv", index=False)
+    tag = f"{args.tag}_{best['name']}"
+    if n_classes is None:
+        pd.DataFrame({config.ID_COL: train[config.ID_COL], "oof": best["oof"]}).to_csv(
+            config.OOF_DIR / f"{tag}.csv", index=False)
+        sub[config.TARGET_COL] = best["test"]
+    else:  # multiclass: OOF K열·test_pred K열·argmax 라벨 제출 → 유효한 멤버로 재진입
+        classes = label_map.classes_
+        oof_df = pd.DataFrame({f"oof_{lbl}": best["oof"][:, i] for i, lbl in enumerate(classes)})
+        oof_df.insert(0, config.ID_COL, train[config.ID_COL].to_numpy())
+        oof_df.to_csv(config.OOF_DIR / f"{tag}.csv", index=False)
+        config.TEST_PRED_DIR.mkdir(parents=True, exist_ok=True)
+        tp_df = pd.DataFrame({str(lbl): best["test"][:, i] for i, lbl in enumerate(classes)})
+        tp_df.insert(0, config.ID_COL, sub[config.ID_COL].to_numpy())
+        tp_df.to_csv(config.TEST_PRED_DIR / f"{tag}.csv", index=False)
+        sub[config.TARGET_COL] = label_map.decode(best["test"].argmax(axis=1))
+    sub.to_csv(config.SUBMISSION_DIR / f"{tag}.csv", index=False)
 
     # 앙상블 기록을 base 모델과 동일한 로그 스트림에 영속화 (members·가중·meta-OOF).
     # → 스택도 experiments/logs 에 남아 summarize/리더보드에 함께 노출(비대칭 제거).
     utils.log_experiment(
-        exp_id=f"{args.tag}_{best['name']}",
+        exp_id=tag,
         model=f"stack:{best['name']}",
         features=members,
         cv_scores=[best["oof_score"]],
@@ -208,7 +291,7 @@ def main() -> None:
         },
         notes=f"stack over {len(members)} members; meta={best['name']}",
     )
-    print(f"\n최고 메타 = {best['name']} ({best['oof_score']:.6f}) → 저장: {args.tag}_{best['name']}.csv")
+    print(f"\n최고 메타 = {best['name']} ({best['oof_score']:.6f}) → 저장: {tag}.csv")
 
 
 if __name__ == "__main__":

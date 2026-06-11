@@ -19,6 +19,10 @@ EXPERIMENTS_DIR: Path = ROOT_DIR / "experiments"
 LOG_DIR: Path = EXPERIMENTS_DIR / "logs"
 OOF_DIR: Path = EXPERIMENTS_DIR / "oof"
 SUBMISSION_DIR: Path = EXPERIMENTS_DIR / "submissions"
+# multiclass 전용: base 멤버의 test-time K-확률 행렬([id, <label>...]). 제출은 argmax 단일
+# 라벨이라 스택이 멤버 test 확률을 못 읽는다 → multiclass 만 이 보조 산출물을 남긴다
+# (binary/regression 은 제출 자체가 스택 가능한 확률/값이라 불필요).
+TEST_PRED_DIR: Path = EXPERIMENTS_DIR / "test_pred"
 MODEL_DIR: Path = EXPERIMENTS_DIR / "models"  # 적합 모델 저장 (save_models=true 일 때만)
 
 TRAIN_PATH: Path = DATA_DIR / "train.csv"
@@ -65,7 +69,8 @@ N_FOLDS: int = 5
 #      multiclass=predict_proba(n,K) (PROBLEM_TYPE 로 분기됨)
 # ⚠️ multiclass: OOF 는 K개 확률 열(experiments/oof/<id>.csv = [id, oof_<label>...]), 제출은
 #    단일 예측 라벨([id, <target>]), 라벨 인코딩(원라벨↔0..K-1)은 train_common 이 처리한다.
-#    스태킹(src.stack)은 아직 multiclass 미지원(후속) — 단일모델 파이프라인만 1급.
+#    스태킹용 멤버 test 확률은 experiments/test_pred/<id>.csv = [id, <label>...] 로 별도 저장한다
+#    (제출은 argmax 라벨이라 확률이 사라지므로). 스태킹(src.stack)도 multiclass 지원(equal/multinomial/nnls).
 # 점검 항목은 docs/setup_questions.md 체크리스트 참조.
 PROBLEM_TYPE: str = "binary"  # binary / regression / multiclass
 

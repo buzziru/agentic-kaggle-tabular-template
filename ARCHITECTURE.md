@@ -53,8 +53,9 @@ flowchart TD
     OUT --> CONTRACT
     subgraph CONTRACT["OOF contract — decoupling boundary"]
         direction LR
-        OOFF["experiments/oof/<exp>.csv"]
+        OOFF["experiments/oof/<exp>.csv<br/>(multiclass: oof_&lt;label&gt; K열)"]
         SUBF["experiments/submissions/<exp>.csv"]
+        TPF["experiments/test_pred/<exp>.csv<br/>(multiclass 전용: 멤버 test 확률 K열)"]
         LOGF["experiments/logs/<exp>.json"]
     end
     FROZEN["guard_frozen.py + frozen.txt<br/>frozen 멤버 산출물 수정 차단"]
@@ -67,10 +68,11 @@ flowchart TD
         RID["validate ids"]
         RR["_resolve_regime<br/>(member cv strategy · n_folds)"]
         MF["cv.get_folds (same regime as base)"]
-        META["meta-CV<br/>binary: equal / rank_mean / logistic / nnls<br/>regression: equal / linear / nnls"]
-        SOUT["save stacked OOF / submission / log"]
+        META["meta-CV<br/>binary: equal / rank_mean / logistic / nnls<br/>regression: equal / linear / nnls<br/>multiclass: equal / multinomial / nnls"]
+        SOUT["save stacked OOF / submission / log<br/>(multiclass: + test_pred)"]
         RID --> RR --> MF --> META --> SOUT
     end
+    TPF -. multiclass member test probs .-> STACK
     SOUT -. re-enters pool (same contract) .-> CONTRACT
 
     LOGF --> SUM["scripts/summarize.py<br/>unified leaderboard"]
