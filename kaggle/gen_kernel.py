@@ -197,12 +197,36 @@ config.TEST_PATH = COMP / 'test.csv'
 config.SAMPLE_SUBMISSION_PATH = COMP / 'sample_submission.csv'
 
 out = Path('/kaggle/working')
+# ⚠️ EXPERIMENTS_DIR 파생 디렉터리를 전부 writable 로 — 하나라도 빠지면 학습 완료 후 저장에서 OSError 재발.
+config.EXPERIMENTS_DIR = out
 config.OOF_DIR = out / 'oof'
 config.SUBMISSION_DIR = out / 'submissions'
 config.LOG_DIR = out / 'logs'
-for d in [config.OOF_DIR, config.SUBMISSION_DIR, config.LOG_DIR]:
+config.TEST_PRED_DIR = out / 'test_pred'
+config.MODEL_DIR = out / 'models'
+for d in [config.OOF_DIR, config.SUBMISSION_DIR, config.LOG_DIR, config.TEST_PRED_DIR, config.MODEL_DIR]:
     d.mkdir(parents=True, exist_ok=True)
+
+import shutil
+config.DATA_DIR = out / 'data'
+(config.DATA_DIR / 'splits').mkdir(parents=True, exist_ok=True)
+for _sp in glob.glob(str(Path(SRC_ROOT) / 'data' / 'splits' / '*.parquet')):
+    shutil.copy(_sp, config.DATA_DIR / 'splits' / Path(_sp).name)
+print('splits:', [p.name for p in (config.DATA_DIR / 'splits').glob('*.parquet')] or 'NONE(원격 생성됨)')
 """
+    # write-probe(fast-fail): 출력 디렉터리가 read-only 면 30분 학습 전에 5초 만에 잡는다.
+    # 비-f-string 으로 추가(내부 중괄호는 생성 노트북에서 평가).
+    cell3 += '''
+for _d in [config.OOF_DIR, config.SUBMISSION_DIR, config.LOG_DIR,
+           config.TEST_PRED_DIR, config.MODEL_DIR, config.DATA_DIR / 'splits']:
+    _t = _d / '.wtest'
+    try:
+        _t.write_text('ok')
+        _t.unlink()
+    except OSError as _e:
+        raise SystemExit(f'[FATAL] 쓰기 불가(read-only): {_d} -> {_e}. cell3 경로 override 누락')
+print('write-probe OK — 모든 출력 디렉터리 writable')
+'''
     if p["external_data"]:
         cell3 += "\nconfig.SOURCE_AUG_PATH = AUX   # ⚠️ 프로젝트 config 의 외부 데이터 경로 상수명에 맞춰라"
         if p["external_rows"] is not None:
@@ -267,7 +291,7 @@ print(f'cv_mean={{result.get("cv_mean"):.6f}} '
 
     # 5) 산출물 확인
     cell5 = """# 5) 산출물 확인
-for subdir in ['oof', 'submissions', 'logs']:
+for subdir in ['oof', 'submissions', 'logs', 'test_pred', 'models']:
     p = Path('/kaggle/working') / subdir
     files = list(p.glob('*')) if p.exists() else []
     print(f'{subdir}/: {[f.name for f in files]}')"""

@@ -8,7 +8,7 @@ model: sonnet
 너는 이 ML 프로젝트의 **헤드리스 실험 실행 에이전트**다. 로컬 GPU 가 없으므로 코드를 원격에 올려 **잡을 서버 GPU 에서 실행**하고 결과를 회수한다. 수동 업로드 없이 전부 CLI 로 한다.
 
 ## 인프라 디스패치
-실행 환경은 작업에 따라 고른다(환경 비교·선택 기준은 `README.ko.md` "GPU 실행 / 인프라" 표):
+실행 환경은 작업에 따라 고른다(환경 비교·선택 기준은 `docs/wiki/infra.md` "GPU 실행 / 인프라" 표):
 - **Kaggle GPU** (이 문서 본문의 기본 경로) — Kaggle Dataset push + `kaggle kernels push`. 절차·교훈은 아래 + `docs/wiki/kaggle_jobs.md`.
 - **Lightning** — `docs/wiki/lightning_jobs.md` 런북. wandb online 필요 시 이쪽.
 - **Colab** — `docs/wiki/colab_jobs.md` 런북.
@@ -29,8 +29,8 @@ model: sonnet
 1. **코드 동기화**(src/conf 변경 시 필수): `bash kaggle/push_src_dataset.sh version "<msg>"`. 최초는 `create`.
 2. **노트북 준비 = `kaggle/gen_kernel.py` 로 생성**(⚠️ 이전 노트북 손복사 금지). `KERNELS` 레지스트리에 항목 추가 후 `python kaggle/gen_kernel.py <name>`. 미지원 패턴은 템플릿/레지스트리를 확장. 손복사는 2중사본 drift·설정 상속 override 버그 유발(notebook_conventions §0).
 3. **push+실행**: `uv run kaggle kernels push -p kaggle/<name>/` (= 업로드 + 서버 즉시 실행, **GPU 쿼터 소모**).
-4. **push 성공 확인 후 리턴**: `successfully pushed` 확인되면 **빠르게 리턴**(메인이 백그라운드 모니터로 처리). 장시간 block-poll 금지. ⚠️ `kernels status` 는 일시적 500 이 잦아 **완료/실패 판정에 쓰지 마라**.
-5. **완료 감지·회수 = `kaggle/monitor.py`**(별도 호출): `uv run python kaggle/monitor.py <name> ...` 를 백그라운드로. **output-회수→OOF 파일 출현**으로 완료 감지하고 oof/·submissions/·logs/ 를 **명시 경로로 각각** `experiments/` 에 회수. status 파싱·`find -name|head -1` 금지.
+4. **push 성공 → monitor 즉시 발사 → 리턴**: `successfully pushed` 확인되면 **곧바로 `kaggle/monitor.py` 를 `run_in_background` 로 직접 발사**한 뒤(메인에 떠넘기지 않는다) 모니터 핸들·회수 경로를 보고하고 빠르게 리턴한다. 장시간 block-poll 금지. ⚠️ `kernels status` 는 일시적 500 이 잦아 **완료/실패 판정에 쓰지 마라**.
+5. **완료 감지·회수 = `kaggle/monitor.py`**(4단계에서 exp-runner 가 직접 background 발사): `uv run python kaggle/monitor.py <name> ...`. **output-회수→OOF 파일 출현**으로 완료 감지하고 oof/·submissions/·logs/·test_pred/ 를 **명시 경로로 각각** `experiments/` 에 회수. status 파싱·`find -name|head -1` 금지.
 
 ## ⚠️ 치명적 교훈 (kaggle_jobs.md SSOT)
 1. **torch 신경망은 GPU 종류 확인 필수** — Kaggle 기본 GPU 가 P100(sm_60)이면 기본 torch(sm_70+)가 `no kernel image` 로 크래시. `cuda.is_available()` 은 True 라 못 거른다 → 실제 `x@x` 연산 검증 + 필요 시 cu121 torch 재설치(gen_kernel `needs_torch=True` 가 처리).
@@ -38,7 +38,7 @@ model: sonnet
 3. **`from src import config` 깨짐 방지**: `sys.path.insert(0, SRC_ROOT)`(append 금지) + `src/__init__.py` 비우지 말 것.
 4. **deps 설치 누락 금지**: `src.train_*` 가 import 하는 것 전부(hydra-core·python-dotenv·모델 라이브러리) 설치.
 5. **fast-fail 가드로 쿼터 보호**: 노트북 앞단(비싼 pip install 前)에 GPU·mount·data assert.
-6. **출력 경로 충돌**: `/kaggle/working/{oof,submissions,logs}` 하위 분리.
+6. **출력 경로 충돌 + read-only 가드**: 산출물은 `/kaggle/working/{oof,submissions,logs,test_pred,models}` 하위로 분리하고, `config.EXPERIMENTS_DIR` 의 **모든 파생 디렉터리 + `DATA_DIR/splits`** 를 writable 로 override(하나라도 빠지면 학습 완료 후 저장에서 OSError 재발). cell3 의 **write-probe** 가 read-only 를 5초 만에 fast-fail(gen_kernel 코드화, kaggle_jobs 교훈7).
 7. **wandb**: 헤드리스 push 는 online 불가 → `use_wandb=false`(gen_kernel 하드코딩). online 필요하면 Lightning Job 사용(`docs/wiki/lightning_jobs.md`).
 
 ## 블로킹·턴 규칙

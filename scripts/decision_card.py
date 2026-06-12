@@ -181,7 +181,8 @@ def build_card(
         ]
     parts += [
         "",
-        "[작성]  이 카드는 컨텍스트만 제공한다. expectation.yaml 은 직접 작성·커밋한다.",
+        "[작성]  이 카드는 컨텍스트만 제공한다. 위 수치는 제안값일 뿐 —",
+        "  predicted/falsification 은 사용자가 직접 작성·커밋한다(AI 자동 채움 금지).",
         "  템플릿: docs/templates/expectation.yaml",
         bar,
     ]

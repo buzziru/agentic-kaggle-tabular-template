@@ -28,7 +28,7 @@
 2. **피처/모델링** — `src/` 중심의 `.py` 작업. 피처는 **오직 `src/features.py` 한 곳**에서 train/test 에 공통 적용한다(아래 "피처 엔지니어링 — 코드 파편화 방지").
 3. **실행**
   - 베이스라인·중간 실험은 **로컬** `.py` 중심으로 돌린다 (`uv run python -m src.train model=lgbm ...`).
-  - 대형 모델·장시간 튜닝은 **GPU 환경**을 쓴다. 환경별 런북 = [kaggle_jobs](docs/wiki/kaggle_jobs.md)·[lightning_jobs](docs/wiki/lightning_jobs.md)·[colab_jobs](docs/wiki/colab_jobs.md). 환경 비교·선택 기준은 [README.ko.md](README.ko.md) 의 "GPU 실행 / 인프라" 표 참조(중복 방지: 표는 거기 한 곳).
+  - 대형 모델·장시간 튜닝은 **GPU 환경**을 쓴다. 환경별 런북 = [kaggle_jobs](docs/wiki/kaggle_jobs.md)·[lightning_jobs](docs/wiki/lightning_jobs.md)·[colab_jobs](docs/wiki/colab_jobs.md). 환경 비교·선택 기준은 [docs/wiki/infra.md](docs/wiki/infra.md) 의 "GPU 실행 / 인프라" 표 참조(중복 방지: 표는 거기 한 곳).
   - ⚠️ 노트북 환경엔 `src/` 코드를 `.ipynb` 변환 또는 Dataset push 후 import 한다. 작성 규칙(생성기·단일 진실원·fast-fail)은 [notebook_conventions](docs/wiki/notebook_conventions.md). 반복 오류는 즉시 가드로 코드화(아래 "외부 인프라 가드").
 4. **실험 결과** — `experiments/logs/<exp_id>.json` 에 구조화 로그를 남긴다(+ W&B, 아래 "실험 추적").
 
@@ -38,12 +38,12 @@
 
 - `eda-explorer` — read-only EDA. 주제별 노트북을 생성하고 **수치 요약만 리턴**한다(토큰 절약).
 - `feature-smith` — `src/features.py` 피처 구현 + 누수 검증 + OOF(Out-of-Fold) 측정. 단일 파일을 건드리므로 **동시 1개만**.
-- `code-reviewer` — 구현 직후·풀 실행 전 [docs/checklists/code_review.md](docs/checklists/code_review.md) 항목별 pass/block 대조. 코드 미수정, 하나라도 block 이면 BLOCK. 작성자와 분리(self-review 방지).
+- `code-reviewer` — 구현 직후·풀 실행 전 [docs/checklists/code_review.md](docs/checklists/code_review.md) 항목별 pass/block 대조. 코드 미수정, 하나라도 block 이면 BLOCK. 작성자와 분리(self-review 방지). ⚠️ **리스크 티어링** — 공유 스캐폴드(`features.py`/`train_common.py`/`cv.py`/`encoders.py`)·새 모델 어댑터·비자명 로직 변경에만 **필수**; config-only(`conf/*.yaml` 노브)·문서·패스스루 베이스라인은 면제(단 frozen-OOF/divergence 위험 시 무조건 필수).
 - `result-reviewer` — 풀 실행 로그를 사전등록 expectation 과 대조해 4종 판정(confirmed/refuted/inconclusive/invalid). 측정 검정력 규칙 내장(|Δ|<~2·SE 는 단일시드 판정 금지). 기록=`docs/wiki/experiments/judgments/`. **다음 실험 제안 금지**.
 - `premise-auditor` — 판정 5건마다 blind 전제 감사(숫자만 입력, rationale 미열람). 공격 가설 3개+최저비용 반증. 기록=`docs/wiki/audits/`. kill/continue 판정은 사용자 몫(천장 게이트 기계화).
-- `exp-runner` — 헤드리스 원격 실행(기본 Kaggle GPU, Lightning/Colab 디스패치). 풀 실행 전 expectation 커밋 + code-reviewer PASS 확인. {{필요 시 도메인 리서치 등 추가}}
+- `exp-runner` — 헤드리스 원격 실행(기본 Kaggle GPU, Lightning/Colab 디스패치). 풀 실행 전 expectation 커밋 + code-reviewer PASS 확인. ⚠️ **원격 push+monitor 는 반드시 이 에이전트 경유** — 메인은 최초 인프라 1회 구성만 직접 하고 이후 실행 사이클은 위임(메인이 `kernels status` 직접 폴링 금지). {{필요 시 도메인 리서치 등 추가}}
 
-⚠️ 풀 실험 1사이클: 설계+expectation 커밋 → (구현) → **code-reviewer** PASS → **exp-runner** 실행 → **result-reviewer** 판정 → 5건마다 **premise-auditor**. 판정·감사 후 방향은 사용자가 정한다.
+⚠️ 풀 실험 1사이클: 설계+expectation 커밋 → (구현) → **code-reviewer** PASS(리스크 티어 해당 시) → **exp-runner** 실행(monitor 자동) → **result-reviewer** 판정 → 5건마다 **premise-auditor**. 판정·감사 후 방향은 사용자가 정한다.
 
 주요 결정은 **[docs/wiki/decisions.md](docs/wiki/decisions.md)(ADR-lite)** 에 기록한다 — 새 결정마다 "왜 그렇게 정했는지"를 남긴다.
 
@@ -66,7 +66,7 @@
 - **실험 ID 컨벤션**: 프로젝트 시작 시 규칙 하나를 고정하고(`exp_<NNN>_<short-slug>` 연번 권장) **끝까지 일관**되게 쓴다(중간 변경 금지).
 - **회고 의무**: 레버/트랙을 종료할 때 해당 실험군 회고를 `docs/wiki/experiments/exp_*.md` 에 작성해야 트랙을 close 한다(가설→결과→결론, 수치+근거). 누락 금지.
 - **외부 인프라 가드**: 반복되는 환경 오류(Kaggle/Colab/GPU 등)는 **1회 발생 시 즉시 재사용 가드로 코드화**한다(코드 생성기·모니터·fast-fail). 가드 없이 N회 반복은 금지다.
-- **expectation 게이트**: 풀 실행은 `specs/<exp_id>/expectation.yaml`(mechanism/predicted/falsification) 을 **실행 전 커밋**해야 한다. `guard_bash.py` 훅이 커밋·작업트리 일치를 검사한다. ⚠️ **스크리닝(`max_folds=`)은 면제** — 사전등록은 풀 실행에만 적용. 템플릿은 [docs/templates/expectation.yaml](docs/templates/expectation.yaml). 작성 직전 [scripts/decision_card.py](scripts/decision_card.py) 로 같은 그룹/모델의 노이즈(~2·SE)를 확인해 임계 설정을 돕는다(읽기 전용·제안만·자동 채움 없음).
+- **expectation 게이트**: 풀 실행은 `specs/<exp_id>/expectation.yaml`(mechanism/predicted/falsification) 을 **실행 전 커밋**해야 한다. `guard_bash.py` 훅이 커밋·작업트리 일치를 검사한다. ⚠️ **스크리닝(`max_folds=`)은 면제** — 사전등록은 풀 실행에만 적용. 템플릿은 [docs/templates/expectation.yaml](docs/templates/expectation.yaml). 작성 직전 [scripts/decision_card.py](scripts/decision_card.py) 로 같은 그룹/모델의 노이즈(~2·SE)를 확인해 임계 설정을 돕는다(읽기 전용·제안만·자동 채움 없음). ⚠️ **predicted/falsification 은 사용자가 작성**한다 — AI 는 mechanism 초안 + decision_card 추정치만 제공(자동 채움 금지).
 - **가드 티어**: 훅 가드는 T0(하드·우회불가)/T1(기록 우회)/T2(경고) 3티어다. T1은 `specs/<exp_id>/override_<guard>.md` 를 커밋하면 통과+로깅(`docs/wiki/guard_overrides.jsonl`) — 훅을 통째로 끄는 것보다 좁고 추적된다. 오차단은 훅을 끄지 말고 `conf/guard/*.txt` 패턴 한 줄로 고친다. 상세 = [docs/wiki/guard_tiers.md](docs/wiki/guard_tiers.md).
 
 ## 프로젝트 구조
@@ -81,6 +81,7 @@
 ## 검증 전략
 
 - ⚠️ **CV 전략·fold 수·seed 를 데이터에 맞게 확정**하고 `src/config.py` 에 둔다(예: StratifiedKFold 5-fold, seed=42). `CV_STRATEGY` 는 `cv.get_folds` 가 디스패치하는 실제 선택자다 — 그룹 누수 위험이면 GroupKFold, 아니면 (Stratified)KFold(공식 지원: Stratified/KFold/Group; 시계열은 미지원 = full-OOF 계약과 불일치, 필요 시 직접 분기). 핵심은 **train/test 분할 방식과 일치**시키는 것 — 근거는 [docs/setup_questions.md](docs/setup_questions.md).
+- ⚠️ **구조적 결정은 config 고정 전 사용자 승인 필수** — CV 전략·fold 수·seed·지표·target/categorical 컬럼은 EDA 로 후보를 좁힌 뒤 **AskUserQuestion 으로 확정**한다(AI 단독 확정 금지). 후보·근거는 [docs/setup_questions.md](docs/setup_questions.md) 에 정리하고 항목별 `[ ] 사용자 승인` 으로 게이트한다.
 - 모든 모델 비교는 **동일 fold(동일 seed) 기준 OOF 점수**로 한다. `cv.get_folds` 는 레짐별 분할을 `data/splits/{strategy}_{n}fold_seed{seed}.parquet` 로 **직렬화(로드-우선)**해 공유 코드 리팩토링에도 분할을 동결한다(5/7/10-fold 공존). ⚠️ 원격 실행엔 splits 파일을 동반해 로드 경로를 태운다(sklearn 버전차로 즉석 생성 시 분할이 달라질 수 있음).
 - ⚠️ **측정 검정력의 한계를 인지한다(필수).** fold 간 std 로 SE 를 추정하고, **|Δ| 가 단일-시드 탐지 임계(~2·SE)보다 작은 결정은 단일 시드로 판정하지 않는다** — 다중 시드로 SE 를 줄이거나, 잔차/stack-add 프레임(노이즈 위에서 판정)으로 본다. 작은 차이를 노이즈에서 '음성'으로 오판하는 것이 흔한 실수다.
 - ⚠️ **OOF≈LB 는 단일 모델에 한정된 가정이다.** 스태커는 별개 레짐이라 meta-OOF 가 held-out 보다 낙관적일 수 있다. 따라서 스택 멤버 추가는 in-sample meta-OOF 가 아니라 held-out/nested 로 판정하고, 멤버 증가의 meta-overfit 비용을 함께 본다.

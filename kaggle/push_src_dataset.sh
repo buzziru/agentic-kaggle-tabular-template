@@ -20,6 +20,11 @@ trap 'rm -rf "$STAGE"' EXIT
 # 코드만 번들 (데이터·산출물·시크릿 제외)
 cp -r src conf "$STAGE"/
 cp kaggle/dataset-metadata.json "$STAGE"/
+# frozen splits 동반 (원격 load-first 경로 — 큰 csv 는 제외, splits parquet 만).
+if [ -d data/splits ]; then
+  mkdir -p "$STAGE/data"
+  cp -r data/splits "$STAGE/data/"
+fi
 find "$STAGE" -name '__pycache__' -type d -prune -exec rm -rf {} +
 
 echo "[push] staging:"; ls -1 "$STAGE"

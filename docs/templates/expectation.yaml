@@ -7,6 +7,9 @@
 #
 # 작성 규칙: 실행 전 작성·커밋. 커밋된 버전이 판정 기준이며 사후 수정 금지.
 #   핵심 3줄(mechanism/predicted/falsification)을 넘기지 말 것.
+#   ⚠️ 작성 주체: predicted·falsification 은 **사용자가 직접 작성**한다(사전등록=사용자
+#   약속 장치). AI 는 mechanism 초안과 decision_card 추정치(노이즈·SE·스모크 fold0)만
+#   제공하고 predicted/falsification 을 자동으로 채우지 않는다.
 #
 # 작성 직전 컨텍스트: `uv run python scripts/decision_card.py --exp-id <id> --model <m> [--baseline <id>]`
 #   로 같은 그룹/모델의 노이즈(fold std→SE, 단일시드 탐지 임계 ~2·SE)를 확인하면
@@ -20,15 +23,15 @@
 exp_id: exp_000
 baseline_run: ""            # 비교 기준 exp_id (OOF/로그가 풀에 있는 멤버)
 
-mechanism: ""               # 점수를 움직일 메커니즘 1줄.
+mechanism: ""               # 점수를 움직일 메커니즘 1줄. (AI 초안 가능)
                             # 예: "비선형 모델군 추가로 표현 분기 → 앙상블 분산 감소"
 
 predicted:
-  metric_delta: ""          # 주 지표의 정량 범위 1개.
+  metric_delta: ""          # ← 사용자 작성(AI 자동 채움 금지). 주 지표의 정량 범위 1개.
                             # 예: "+0.001 ~ +0.003 (vs baseline, 주 지표)"
-  secondary: ""             # 선택: 보조 지표 1개 (상관, 분산, 부분군 성능 등)
+  secondary: ""             # ← 사용자 작성(선택). 보조 지표 1개 (상관, 분산, 부분군 성능 등)
 
-falsification: ""           # 어떤 숫자가 나오면 어떤 전제가 기각되는가 1줄.
+falsification: ""           # ← 사용자 작성(AI 자동 채움 금지). 어떤 숫자가 나오면 어떤 전제가 기각되는가 1줄.
                             # "기대보다 낮으면" 같은 모호한 표현 금지. 숫자 경계 명시.
                             # 예: "OOF 상관 >= 0.985 이면 다양성 전제 기각"
                             # (= 과거 kill_criterion 의 역할을 여기서 수행)
