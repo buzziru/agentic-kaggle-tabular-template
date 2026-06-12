@@ -34,12 +34,39 @@ DEFAULT_PUSH = [
 ]
 
 
+def meta_exp_id(cmd: str, cwd: str) -> tuple[str | None, str]:
+    """`kaggle kernels push` 의 -p/--path <dir>/kernel-metadata.json 에서 exp_id 를 읽는다.
+
+    명령줄이 아니라 메타데이터(gen_kernel.py 가 KERNELS SSOT 에서 기록)를 진실원으로 쓴다 —
+    명령줄 exp_id= 변수 주입 우회를 제거한다. push 게이트는 우회 방지가 목적이라 metadata 를
+    못 읽으면 fail-closed(차단)한다.
+
+    Returns:
+        (exp_id, "") 성공 / (None, 사유) 실패.
+    """
+    md = re.search(r"(?:-p|--path)\s+(\S+)", cmd)
+    d = md.group(1).strip("'\"") if md else "."
+    base = d if os.path.isabs(d) else os.path.join(cwd, d)
+    meta = os.path.join(base, "kernel-metadata.json")
+    if not os.path.isfile(meta):
+        return None, "kernel-metadata.json 을 찾지 못함: %s" % meta
+    try:
+        with open(meta, encoding="utf-8") as fh:
+            exp_id = (json.load(fh) or {}).get("exp_id")
+    except Exception as e:  # 파싱 실패도 fail-closed
+        return None, "kernel-metadata.json 파싱 실패: %s" % e
+    if not exp_id:
+        return None, "kernel-metadata.json 에 exp_id 필드가 없음"
+    return exp_id, ""
+
+
 def main() -> int:
     try:
         data = json.load(sys.stdin)
     except Exception:
         return 0
     project = os.environ.get("CLAUDE_PROJECT_DIR") or data.get("cwd") or os.getcwd()
+    cwd = data.get("cwd") or project  # push -p <dir> 의 상대경로 기준
     cmd = (data.get("tool_input") or {}).get("command") or ""
     if not cmd:
         return 0
@@ -99,17 +126,27 @@ def main() -> int:
     is_run = any(re.search(p, cmd) for p in run_pats)
     is_stack = bool(re.search(r"-m\s+src\.stack", cmd))
     has_maxfolds = bool(re.search(r"max_folds\s*=", cmd))
+    is_push = bool(re.search(r"kaggle\s+kernels\s+push", cmd))
 
     if is_run and not is_stack and not has_maxfolds:
-        m = re.search(r"exp_id=(exp_[A-Za-z0-9_]+)", cmd) or re.search(
-            r"(?<![A-Za-z0-9_])(exp_[A-Za-z0-9_]+)", cmd
-        )
-        if not m:
-            block(
-                "BLOCKED: 풀 실행 명령에서 exp_id 를 추출하지 못했습니다 (fail-closed).",
-                "exp_id=exp_NNN 를 명시하거나, 스크리닝이면 명령에 max_folds= 를 지정하세요.",
+        if is_push:
+            # push 는 명령줄이 아니라 kernel-metadata.json 의 exp_id 로 게이트한다.
+            exp_id, err = meta_exp_id(cmd, cwd)
+            if exp_id is None:
+                block(
+                    "BLOCKED: push exp_id 게이트 — %s (fail-closed)." % err,
+                    "kaggle/gen_kernel.py 로 커널을 재생성해 kernel-metadata.json 의 exp_id 를 채우세요.",
+                )
+        else:
+            m = re.search(r"exp_id=(exp_[A-Za-z0-9_]+)", cmd) or re.search(
+                r"(?<![A-Za-z0-9_])(exp_[A-Za-z0-9_]+)", cmd
             )
-        exp_id = m.group(1)
+            if not m:
+                block(
+                    "BLOCKED: 풀 실행 명령에서 exp_id 를 추출하지 못했습니다 (fail-closed).",
+                    "exp_id=exp_NNN 를 명시하거나, 스크리닝이면 명령에 max_folds= 를 지정하세요.",
+                )
+            exp_id = m.group(1)
         # exp_id 포맷 [T1]: 연번 컨벤션 exp_<NNN>_<slug>.
         if not re.match(r"^exp_\d+_", exp_id):
             t1(

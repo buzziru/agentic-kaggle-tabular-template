@@ -9,8 +9,7 @@
      OOF 로 잘못 회수. -> **명시적 서브디렉터리**(oof/·submissions/·logs/)에서 각각 회수.
 
 slug·exp_id 는 gen_kernel 의 KERNELS 레지스트리(SSOT)에서 가져온다.
-
-▶ 사용 전 채울 것: OWNER (본인 Kaggle 사용자명).
+OWNER·_load_env 도 gen_kernel 에서 import 한다(.env 의 KAGGLE_USERNAME 파생, 미채움 플레이스홀더 없음).
 
 사용:
     uv run python kaggle/monitor.py <name> [<name> ...]
@@ -26,26 +25,11 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from gen_kernel import KERNELS  # noqa: E402
+from gen_kernel import KERNELS, OWNER, _load_env  # noqa: E402  (OWNER/_load_env 단일 진실원)
 
 REPO = Path(__file__).resolve().parent.parent
-OWNER = "{{KAGGLE_USER}}"   # 본인 Kaggle 사용자명
 POLL_SEC = 90
 MAX_ITERS = 200  # ~5h 안전 상한
-
-
-def _load_env() -> None:
-    """.env 의 KAGGLE_USERNAME/KAGGLE_KEY 를 os.environ 에 주입."""
-    import os
-
-    env = REPO / ".env"
-    if not env.exists():
-        return
-    for line in env.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            os.environ.setdefault(k.strip(), v.strip())
 
 
 def _try_recover(name: str) -> bool:

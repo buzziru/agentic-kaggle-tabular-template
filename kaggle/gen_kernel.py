@@ -22,15 +22,40 @@ True 가 될 수 없게 막는다. GPU 모델로 wandb 가 필요하면 Colab/Li
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 KAGGLE_DIR = Path(__file__).resolve().parent
+REPO = KAGGLE_DIR.parent
 
-# ── 프로젝트별 상수 (채울 것) ───────────────────────────────────────────
-OWNER = "{{KAGGLE_USER}}"                       # 본인 Kaggle 사용자명
+
+def _load_env() -> None:
+    """REPO/.env 의 KAGGLE_USERNAME/KAGGLE_KEY 등을 os.environ 에 주입(setdefault).
+
+    OWNER 가 env 로드 후 결정되도록 모듈 import 시점에 1회 호출한다(monitor 도 공유).
+    """
+    env = REPO / ".env"
+    if not env.exists():
+        return
+    for line in env.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_env()
+sys.path.insert(0, str(REPO))
+from src import config  # noqa: E402  (COMPETITION 단일 진실원)
+
+# ── 프로젝트별 상수 ──────────────────────────────────────────────────────
+# OWNER·COMPETITION 은 채울 플레이스홀더 없이 단일 진실원에서 파생한다(미채움 재발 차단):
+#   OWNER       = .env 의 KAGGLE_USERNAME    COMPETITION = src/config.py 의 COMPETITION
+# SRC_DATASET 슬러그만 프로젝트별 1회 지정한다.
+OWNER = os.environ.get("KAGGLE_USERNAME") or "{{KAGGLE_USER}}"
 SRC_DATASET = f"{OWNER}/{{{{SRC_DATASET}}}}"    # 코드 번들 Dataset 슬러그 (예: f"{OWNER}/proj-src")
-COMPETITION = "{{COMPETITION_SLUG}}"            # 대회 슬러그
+COMPETITION = config.COMPETITION                # 대회 슬러그 (src/config.py 가 SSOT)
 # (선택) 외부 보조 데이터 공개 Dataset. 없으면 빈 리스트로 둔다.
 EXTERNAL_DATASETS: list[str] = []              # 예: ["someuser/some-aux-dataset"]
 DATASET_SOURCES = [SRC_DATASET, *EXTERNAL_DATASETS]
@@ -45,7 +70,7 @@ KERNELS: dict[str, dict] = {
         slug="example-lgbm-cpu",
         title="example lgbm cpu",
         display="LGBM 예시 — CPU OOF",
-        exp_id="exp_example_lgbm",
+        exp_id="exp_000_example_lgbm",
         features="base",          # conf/features/base.yaml
         model="lgbm",             # conf/model/lgbm.yaml — registry 가 model.name 으로 트레이너 선택
         notes="예시 커널: LGBM baseline OOF",
@@ -57,7 +82,7 @@ KERNELS: dict[str, dict] = {
         slug="example-nn-gpu",
         title="example nn gpu",
         display="신경망 예시 — GPU(T4) OOF",
-        exp_id="exp_example_nn",
+        exp_id="exp_000_example_nn",
         features="base",
         model="nn",               # src/train_nn.py 작성 후 src/registry.py 에 "nn" 등록 필요
         notes="예시 커널: torch 모델 GPU OOF",
@@ -305,6 +330,8 @@ def _metadata(name: str, p: dict) -> dict:
         "id": f"{OWNER}/{p['slug']}",
         "title": p["title"],
         "code_file": f"{name}.ipynb",
+        # guard_bash.py 가 `kaggle kernels push` 시 명령줄이 아니라 이 필드로 exp_id 게이트를 적용한다.
+        "exp_id": p["exp_id"],
         "language": "python",
         "kernel_type": "notebook",
         "is_private": True,
@@ -327,6 +354,11 @@ def generate(name: str) -> Path:
     """
     if name not in KERNELS:
         raise KeyError(f"미등록 커널: {name}. 등록: {list(KERNELS)}")
+    if "{{" in OWNER or "{{" in COMPETITION:
+        raise RuntimeError(
+            "OWNER/COMPETITION 미설정 — .env 에 KAGGLE_USERNAME 을 넣고 src/config.py 의 "
+            "COMPETITION 을 대회 슬러그로 채우세요 (미채움 push 차단)."
+        )
     p = {**DEFAULTS, **KERNELS[name]}
 
     kdir = KAGGLE_DIR / name
